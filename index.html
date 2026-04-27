@@ -1,519 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SageHouse Newsletter Generator</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-  <style>
-    :root {
-      --navy: #1B2A4A;
-      --gold: #C9A84C;
-      --light: #F8F9FA;
-      --border: #E8E8E8;
-      --text: #2C2C2C;
-      --muted: #888;
-      --red: #C0392B;
-      --green: #1E7E34;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-      background: var(--light);
-      color: var(--text);
-      min-height: 100vh;
-    }
-
-    /* ── Header ── */
-    header {
-      background: var(--navy);
-      color: white;
-      padding: 0 32px;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    }
-
-    .logo {
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: 0.3px;
-    }
-
-    .logo span { color: var(--gold); }
-
-    .header-meta {
-      font-size: 12px;
-      color: rgba(255,255,255,0.5);
-    }
-
-    /* ── Layout ── */
-    .app {
-      display: grid;
-      grid-template-columns: 340px 1fr;
-      gap: 0;
-      min-height: calc(100vh - 60px);
-    }
-
-    /* ── Left panel ── */
-    .controls {
-      background: white;
-      border-right: 1px solid var(--border);
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      position: sticky;
-      top: 60px;
-      height: calc(100vh - 60px);
-      overflow-y: auto;
-    }
-
-    .panel-title {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-
-    /* Newsletter type */
-    .type-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-    }
-
-    .type-card {
-      padding: 10px 6px;
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.15s;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-
-    .type-card:hover { border-color: var(--navy); color: var(--navy); }
-
-    .type-card.active {
-      border-color: var(--navy);
-      background: var(--navy);
-      color: white;
-    }
-
-    .type-card .icon { font-size: 18px; display: block; margin-bottom: 4px; }
-
-    /* Context textarea */
-    textarea {
-      width: 100%;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 12px;
-      font-family: inherit;
-      resize: vertical;
-      line-height: 1.6;
-      color: var(--text);
-      min-height: 160px;
-      transition: border-color 0.15s;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: var(--navy);
-    }
-
-    /* Data sources */
-    .data-sources {
-      background: var(--light);
-      border-radius: 8px;
-      padding: 12px;
-      border: 1px solid var(--border);
-    }
-
-    .source-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 0;
-      font-size: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .source-item:last-child { border-bottom: none; }
-
-    .source-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--gold);
-      flex-shrink: 0;
-    }
-
-    /* Generate button */
-    .generate-btn {
-      width: 100%;
-      padding: 14px;
-      background: var(--navy);
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.15s;
-      letter-spacing: 0.3px;
-    }
-
-    .generate-btn:hover:not(:disabled) { background: #243a68; }
-
-    .generate-btn:disabled {
-      background: #bbb;
-      cursor: not-allowed;
-    }
-
-    .generate-btn .spinner {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-right: 8px;
-      vertical-align: middle;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Status */
-    .status-bar {
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 12px;
-      display: none;
-    }
-
-    .status-bar.show { display: block; }
-    .status-bar.loading { background: #e8f0fe; color: #1a56db; border: 1px solid #c3d9fb; }
-    .status-bar.error { background: #fde8e8; color: var(--red); border: 1px solid #f5c6c6; }
-    .status-bar.success { background: #e6f4ea; color: var(--green); border: 1px solid #b7dfbf; }
-
-    /* ── Right panel ── */
-    .output {
-      padding: 28px 32px;
-      min-height: calc(100vh - 60px);
-    }
-
-    .output-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 20px;
-    }
-
-    .output-title {
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--navy);
-    }
-
-    .output-meta {
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    /* Tabs */
-    .tabs {
-      display: flex;
-      gap: 4px;
-      border-bottom: 2px solid var(--border);
-      margin-bottom: 20px;
-    }
-
-    .tab {
-      padding: 8px 16px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--muted);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-      transition: all 0.15s;
-    }
-
-    .tab:hover { color: var(--navy); }
-
-    .tab.active {
-      color: var(--navy);
-      border-bottom-color: var(--navy);
-    }
-
-    /* Newsletter content */
-    .newsletter-body {
-      background: white;
-      border-radius: 12px;
-      padding: 36px 40px;
-      border: 1px solid var(--border);
-      max-width: 720px;
-      line-height: 1.7;
-      font-size: 14px;
-    }
-
-    .newsletter-body h1 {
-      font-size: 22px;
-      color: var(--navy);
-      margin-bottom: 6px;
-      font-weight: 700;
-    }
-
-    .newsletter-body h2 {
-      font-size: 15px;
-      color: var(--navy);
-      margin: 28px 0 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      padding-bottom: 6px;
-      border-bottom: 2px solid var(--gold);
-    }
-
-    .newsletter-body p {
-      margin-bottom: 14px;
-      color: #333;
-    }
-
-    .newsletter-body .chart-embed {
-      margin: 16px 0;
-      padding: 16px;
-      background: var(--light);
-      border-radius: 8px;
-      border: 1px solid var(--border);
-    }
-
-    .newsletter-body .chart-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin-bottom: 8px;
-    }
-
-    /* Export actions */
-    .export-bar {
-      display: flex;
-      gap: 10px;
-      margin-top: 20px;
-      max-width: 720px;
-    }
-
-    .export-btn {
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
-      border: 2px solid var(--navy);
-      color: var(--navy);
-      background: white;
-    }
-
-    .export-btn:hover { background: var(--navy); color: white; }
-
-    .export-btn.primary {
-      background: var(--gold);
-      border-color: var(--gold);
-      color: white;
-    }
-
-    .export-btn.primary:hover { background: #b8943a; border-color: #b8943a; }
-
-    /* Empty state */
-    .empty-state {
-      text-align: center;
-      padding: 80px 40px;
-      color: var(--muted);
-    }
-
-    .empty-state .icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.4;
-    }
-
-    .empty-state p { font-size: 14px; line-height: 1.6; }
-
-    /* Charts tab */
-    .charts-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-      gap: 16px;
-      max-width: 1000px;
-    }
-
-    .chart-card {
-      background: white;
-      border-radius: 12px;
-      padding: 20px;
-      border: 1px solid var(--border);
-    }
-
-    .chart-card-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin-bottom: 12px;
-    }
-
-    /* Pulse table */
-    .pulse-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    .pulse-table th {
-      text-align: left;
-      padding: 8px 12px;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--muted);
-      border-bottom: 2px solid var(--border);
-    }
-
-    .pulse-table td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .trend-up { color: var(--green); font-weight: 700; }
-    .trend-down { color: var(--red); font-weight: 700; }
-    .trend-flat { color: var(--muted); font-weight: 700; }
-  </style>
-</head>
-<body>
-
-<header>
-  <div class="logo">Sage<span>House</span> Newsletter Generator</div>
-  <div class="header-meta" id="headerMeta">Select a newsletter type to begin</div>
-</header>
-
-<div class="app">
-
-  <!-- Left: Controls -->
-  <aside class="controls">
-
-    <div>
-      <div class="panel-title">Newsletter Type</div>
-      <div class="type-grid">
-        <div class="type-card active" onclick="setType('sagehouse', this)">
-          <span class="icon">🏛️</span>SageHouse<br>Group
-        </div>
-        <div class="type-card" onclick="setType('spv1', this)">
-          <span class="icon">📊</span>SPV1<br>Standalone
-        </div>
-        <div class="type-card" onclick="setType('proof3', this)">
-          <span class="icon">💪</span>proof3<br>Group
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <div class="panel-title">Data Sources</div>
-      <div class="data-sources">
-        <div class="source-item">
-          <div class="source-dot"></div>
-          <span>Master KPI - SageHouse Group</span>
-        </div>
-        <div class="source-item">
-          <div class="source-dot"></div>
-          <span>Master KPI - SPV1 Standalone</span>
-        </div>
-        <div class="source-item">
-          <div class="source-dot"></div>
-          <span>Master KPI - proof3 Group</span>
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <div class="panel-title">Monthly Context</div>
-      <textarea id="context" placeholder="Add context Claude can't see in the numbers:
-
-- proof3 member count: [X], up from [Y]
-- Member story: [name, age, specific results, quote]
-- Portfolio company updates worth flagging
-- Earnout collections or new investments
-- Anything unusual in the numbers"></textarea>
-    </div>
-
-    <div>
-      <button class="generate-btn" id="generateBtn" onclick="generate()">
-        ⚡ Generate Newsletter
-      </button>
-      <div class="status-bar" id="status"></div>
-    </div>
-
-  </aside>
-
-  <!-- Right: Output -->
-  <main class="output">
-
-    <div class="output-header">
-      <div class="output-title" id="outputTitle">Newsletter Preview</div>
-      <div class="output-meta" id="outputMeta"></div>
-    </div>
-
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('newsletter', this)">📄 Newsletter</div>
-      <div class="tab" onclick="switchTab('charts', this)">📊 Charts</div>
-    </div>
-
-    <div id="newsletterTab">
-      <div class="empty-state" id="emptyState">
-        <div class="icon">📰</div>
-        <p>Select a newsletter type, add your monthly context,<br>and click Generate to create your investor update.</p>
-      </div>
-      <div id="newsletterContent" style="display:none">
-        <div class="newsletter-body" id="newsletterBody"></div>
-        <div class="export-bar">
-          <button class="export-btn" onclick="copyNewsletter()">📋 Copy Text</button>
-          <button class="export-btn primary" onclick="exportToDoc()">
-            📄 Export to Google Doc
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div id="chartsTab" style="display:none">
-      <div class="charts-grid" id="chartsGrid"></div>
-    </div>
-
-  </main>
-</div>
-
-<script type="module">
-  import { fetchSheetData } from './sheets.js';
-
+<script>
   // ── Config ──────────────────────────────────────────────
-  // Replace with your Cloudflare Worker URL
   const WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
 
   // ── State ────────────────────────────────────────────────
@@ -523,7 +9,7 @@
   let chartInstances = [];
 
   // ── Type selection ───────────────────────────────────────
-  window.setType = function(type, el) {
+  function setType(type, el) {
     currentType = type;
     document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
@@ -534,21 +20,21 @@
     };
     document.getElementById('outputTitle').textContent = labels[type];
     document.getElementById('headerMeta').textContent = labels[type];
-  };
+  }
 
   // ── Tab switching ─────────────────────────────────────────
-  window.switchTab = function(tab, el) {
+  function switchTab(tab, el) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
-    document.getElementById('newsletterTab').style.display = 
+    document.getElementById('newsletterTab').style.display =
       tab === 'newsletter' ? 'block' : 'none';
-    document.getElementById('chartsTab').style.display = 
+    document.getElementById('chartsTab').style.display =
       tab === 'charts' ? 'block' : 'none';
-    if (tab === 'charts' && parsedCharts.length > 0 && 
+    if (tab === 'charts' && parsedCharts.length > 0 &&
         chartInstances.length === 0) {
       renderCharts();
     }
-  };
+  }
 
   // ── Status helper ─────────────────────────────────────────
   function showStatus(type, msg) {
@@ -557,8 +43,108 @@
     el.textContent = msg;
   }
 
+  // ── Google Sheets CSV fetcher ─────────────────────────────
+  const SHEET_CONFIGS = {
+    sagehouse: {
+      sheetId: 'YOUR_SAGEHOUSE_SHEET_ID',
+      gid: 'YOUR_SAGEHOUSE_KPI_GID'
+    },
+    spv1: {
+      sheetId: 'YOUR_SAGEHOUSE_SHEET_ID',
+      gid: 'YOUR_SPV1_KPI_GID'
+    },
+    proof3: {
+      sheetId: 'YOUR_SAGEHOUSE_SHEET_ID',
+      gid: 'YOUR_PROOF3_KPI_GID'
+    }
+  };
+
+  async function fetchSheetData(newsletterType) {
+    const config = SHEET_CONFIGS[newsletterType];
+    if (!config) throw new Error('Unknown newsletter type: ' + newsletterType);
+
+    const url = `https://docs.google.com/spreadsheets/d/${config.sheetId}/export?format=csv&gid=${config.gid}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(
+        'Could not read sheet. Make sure it is shared as "Anyone with the link can view". Status: ' + response.status
+      );
+    }
+
+    const csv = await response.text();
+    return parseAndCleanCsv(csv);
+  }
+
+  function parseAndCleanCsv(csv) {
+    const lines = csv.split('\n').filter(l => l.trim());
+    if (lines.length < 3) throw new Error('Sheet appears empty or not loaded yet.');
+
+    const rows = lines.map(parseCsvLine);
+
+    // Find header row containing month names
+    const headerRowIndex = rows.findIndex(row =>
+      row.some(cell => /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(cell))
+    );
+
+    if (headerRowIndex === -1) {
+      throw new Error('Could not find month headers. Check the Master KPI tab structure.');
+    }
+
+    const headers = rows[headerRowIndex];
+    const totalCols = headers.length;
+    const startCol = Math.max(1, totalCols - 12);
+    const monthHeaders = headers.slice(startCol);
+
+    const dataRows = rows
+      .slice(headerRowIndex + 1)
+      .filter(row => row[0] && row[0].trim());
+
+    let table = `Metric\t${monthHeaders.join('\t')}\n`;
+    table += '-'.repeat(80) + '\n';
+
+    dataRows.forEach(row => {
+      const metricName = row[0];
+      const values = row.slice(startCol).map(v => {
+        const cleaned = v.replace(/[$,%]/g, '').trim();
+        const num = parseFloat(cleaned);
+        if (!isNaN(num) && v.includes('%')) return num.toFixed(1) + '%';
+        if (!isNaN(num) && Math.abs(num) >= 1000000)
+          return '$' + (num / 1000000).toFixed(2) + 'M';
+        if (!isNaN(num) && Math.abs(num) >= 1000)
+          return '$' + (num / 1000).toFixed(1) + 'k';
+        return v.trim();
+      });
+      table += `${metricName}\t${values.join('\t')}\n`;
+    });
+
+    return {
+      table,
+      rowCount: dataRows.length,
+      colCount: monthHeaders.length
+    };
+  }
+
+  function parseCsvLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') {
+        inQuotes = !inQuotes;
+      } else if (line[i] === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += line[i];
+      }
+    }
+    result.push(current.trim());
+    return result;
+  }
+
   // ── Main generate flow ────────────────────────────────────
-  window.generate = async function() {
+  async function generate() {
     const btn = document.getElementById('generateBtn');
     const context = document.getElementById('context').value;
 
@@ -567,20 +153,17 @@
     showStatus('loading', 'Reading Master KPI tab from Google Sheets...');
 
     try {
-      // Step 1: Fetch KPI data from Google Sheets
       const sheetData = await fetchSheetData(currentType);
 
-      showStatus('loading', 
-        `Loaded ${sheetData.rowCount} metrics × ${sheetData.colCount} months. ` +
-        `Calling Claude...`);
+      showStatus('loading',
+        'Loaded ' + sheetData.rowCount + ' metrics x ' +
+        sheetData.colCount + ' months. Calling Claude...');
       btn.innerHTML = '<span class="spinner"></span>Generating newsletter...';
 
-      // Step 2: Build prompts
       const { systemPrompt, userMessage } = buildPrompts(
         currentType, sheetData.table, context
       );
 
-      // Step 3: Call Claude via Cloudflare Worker
       const response = await fetch(WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -591,7 +174,6 @@
       });
 
       const result = await response.json();
-
       if (result.error) throw new Error(result.error.message || result.error);
 
       const text = result.content[0].text;
@@ -599,25 +181,24 @@
       parsedCharts = extractCharts(text);
       chartInstances = [];
 
-      // Step 4: Render
       renderNewsletter(text);
-      showStatus('success', 
-        `✅ Done. ${result.usage.input_tokens.toLocaleString()} tokens in, ` +
-        `${result.usage.output_tokens.toLocaleString()} out.`);
+      showStatus('success',
+        'Done. ' + result.usage.input_tokens.toLocaleString() +
+        ' tokens in, ' + result.usage.output_tokens.toLocaleString() + ' out.');
 
-      document.getElementById('outputMeta').textContent = 
-        new Date().toLocaleDateString('en-US', 
+      document.getElementById('outputMeta').textContent =
+        new Date().toLocaleDateString('en-US',
           { month: 'long', day: 'numeric', year: 'numeric' });
 
-    } catch(err) {
-      showStatus('error', '❌ ' + err.message);
+    } catch (err) {
+      showStatus('error', 'Error: ' + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = '⚡ Generate Newsletter';
+      btn.textContent = 'Generate Newsletter';
     }
-  };
+  }
 
-  // ── Render newsletter HTML ────────────────────────────────
+  // ── Render newsletter ─────────────────────────────────────
   function renderNewsletter(text) {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('newsletterContent').style.display = 'block';
@@ -626,27 +207,23 @@
     let chartIndex = 0;
     let html = '';
 
-    // Split on chart blocks, render each section
     const parts = text.split(/(```chart[\s\S]*?```)/g);
-
     parts.forEach(part => {
       if (part.startsWith('```chart')) {
-        // Replace chart block with canvas placeholder
-        const id = 'chart-inline-' + chartIndex++;
+        chartIndex++;
+        const id = 'chart-inline-' + (chartIndex - 1);
         html += `
           <div class="chart-embed">
             <div class="chart-label">Chart ${chartIndex}</div>
             <canvas id="${id}" height="180"></canvas>
           </div>`;
       } else {
-        // Convert markdown to HTML
         html += markdownToHtml(part);
       }
     });
 
     body.innerHTML = html;
 
-    // Render inline charts after DOM update
     setTimeout(() => {
       parsedCharts.forEach((chart, i) => {
         const canvas = document.getElementById('chart-inline-' + i);
@@ -655,48 +232,45 @@
     }, 50);
   }
 
-  // ── Minimal markdown to HTML converter ───────────────────
   function markdownToHtml(text) {
     return text
       .replace(/^## (.+)$/gm, '<h2>$1</h2>')
       .replace(/^# (.+)$/gm, '<h1>$1</h1>')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n\n+/g, '</p><p>')
       .replace(/^(?!<[h|p])(.+)$/gm, '<p>$1</p>')
       .replace(/<p><\/p>/g, '')
       .trim();
   }
 
-  // ── Extract chart JSON from text ──────────────────────────
   function extractCharts(text) {
     const charts = [];
     const regex = /```chart\n([\s\S]*?)```/g;
     let match;
     while ((match = regex.exec(text)) !== null) {
       try { charts.push(JSON.parse(match[1])); }
-      catch(e) { console.warn('Chart parse error:', e); }
+      catch (e) { console.warn('Chart parse error:', e); }
     }
     return charts;
   }
 
-  // ── Render charts tab ─────────────────────────────────────
   function renderCharts() {
     const grid = document.getElementById('chartsGrid');
     grid.innerHTML = '';
     chartInstances = [];
 
     if (parsedCharts.length === 0) {
-      grid.innerHTML = '<p style="color:var(--muted)">No charts in this newsletter.</p>';
+      grid.innerHTML = '<p style="color:var(--muted)">No charts found.</p>';
       return;
     }
 
     parsedCharts.forEach((chart, i) => {
       const card = document.createElement('div');
       card.className = 'chart-card';
-      card.innerHTML = `
-        <div class="chart-card-title">${chart.title || 'Chart ' + (i+1)}</div>
-        <canvas id="chart-tab-${i}" height="200"></canvas>`;
+      card.innerHTML =
+        '<div class="chart-card-title">' + (chart.title || 'Chart ' + (i + 1)) + '</div>' +
+        '<canvas id="chart-tab-' + i + '" height="200"></canvas>';
       grid.appendChild(card);
       setTimeout(() => {
         const canvas = document.getElementById('chart-tab-' + i);
@@ -705,13 +279,12 @@
     });
   }
 
-  // ── Single chart renderer ─────────────────────────────────
   function renderSingleChart(canvas, chart) {
     const labels = chart.data.map(d => d.month);
     const datasets = (chart.series || []).map(s => ({
       label: s.name,
       data: chart.data.map(d => d[s.key] || 0),
-      backgroundColor: chart.type === 'bar' 
+      backgroundColor: chart.type === 'bar'
         ? chart.data.map(d => (d[s.key] || 0) < 0 ? '#C0392B33' : s.color + '33')
         : s.color + '22',
       borderColor: chart.type === 'bar'
@@ -739,10 +312,10 @@
             callbacks: {
               label: ctx => {
                 const v = ctx.parsed.y;
-                if (Math.abs(v) >= 1000000) 
-                  return ctx.dataset.label + ': $' + (v/1000000).toFixed(2) + 'M';
-                if (Math.abs(v) >= 1000) 
-                  return ctx.dataset.label + ': $' + (v/1000).toFixed(1) + 'k';
+                if (Math.abs(v) >= 1000000)
+                  return ctx.dataset.label + ': $' + (v / 1000000).toFixed(2) + 'M';
+                if (Math.abs(v) >= 1000)
+                  return ctx.dataset.label + ': $' + (v / 1000).toFixed(1) + 'k';
                 return ctx.dataset.label + ': ' + v;
               }
             }
@@ -754,8 +327,8 @@
             ticks: {
               font: { size: 10 },
               callback: v => {
-                if (Math.abs(v) >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
-                if (Math.abs(v) >= 1000) return '$' + (v/1000).toFixed(0) + 'k';
+                if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toFixed(1) + 'M';
+                if (Math.abs(v) >= 1000) return '$' + (v / 1000).toFixed(0) + 'k';
                 return v;
               }
             }
@@ -769,34 +342,25 @@
     });
   }
 
-  // ── Copy newsletter ───────────────────────────────────────
-  window.copyNewsletter = function() {
+  function copyNewsletter() {
     const clean = currentNewsletter.replace(/```chart[\s\S]*?```/g, '');
     navigator.clipboard.writeText(clean.trim()).then(() => {
-      showStatus('success', '✅ Newsletter text copied to clipboard.');
+      showStatus('success', 'Newsletter text copied to clipboard.');
     });
-  };
+  }
 
-  // ── Export to Google Doc ──────────────────────────────────
-  window.exportToDoc = function() {
-    // Google Docs doesn't have a direct write API from the browser without OAuth.
-    // This opens a new Doc with the content pre-filled via URL encoding.
-    // For full OAuth-based export, use the Apps Script version instead.
+  function exportToDoc() {
     const clean = currentNewsletter
       .replace(/```chart[\s\S]*?```/g, '[Chart]')
       .trim();
-
-    // Copy to clipboard and open new Google Doc
     navigator.clipboard.writeText(clean).then(() => {
-      showStatus('success', 
-        '✅ Newsletter copied. Opening Google Docs — paste with Cmd+V.');
+      showStatus('success', 'Newsletter copied. Opening Google Docs - paste with Cmd+V.');
       setTimeout(() => {
         window.open('https://docs.google.com/document/create', '_blank');
       }, 800);
     });
-  };
+  }
 
-  // ── Prompt builders ───────────────────────────────────────
   function buildPrompts(type, kpiData, context) {
     const typeLabels = {
       sagehouse: 'SageHouse Group (TSH + SHC + SHA)',
@@ -805,13 +369,13 @@
     };
 
     const audienceContext = {
-      sagehouse: `These are SageHouse Group investors. They care about total portfolio 
-value, proof3 progress, advisory revenue, cash position, and whether the investment 
+      sagehouse: `These are SageHouse Group investors. They care about total portfolio
+value, proof3 progress, advisory revenue, cash position, and whether the investment
 thesis is playing out. Do NOT detail individual proof3 operating metrics.`,
-      spv1: `These are SPV1 standalone investors. They care about SPV1's balance sheet, 
+      spv1: `These are SPV1 standalone investors. They care about SPV1 balance sheet,
 the convertible note structure, and proof3 as the underlying asset.`,
-      proof3: `These are proof3/SPV1 investors. They care EXCLUSIVELY about proof3 
-operating metrics: member count, revenue, burn rate, path to profitability. 
+      proof3: `These are proof3/SPV1 investors. They care EXCLUSIVELY about proof3
+operating metrics: member count, revenue, burn rate, path to profitability.
 Do NOT include broader SageHouse portfolio updates.`
     };
 
@@ -821,7 +385,7 @@ ENTITY STRUCTURE:
 The SageHouse (TSH) owns SageHouse Capital (SHC) and SageHouse Advisors (SHA).
 SHC owns SageHouse Capital SPV1, which owns proof3 Training Inc (proof3 Coaching + proof3 Gym 1 Phoenix).
 TSH invests in early-stage fitness, health, and wellness technology companies.
-proof3 Gym 1 is in Scottsdale/Salt River AZ, opened Jan 2025. Breakeven ~100-110 members.
+proof3 Gym 1 is in Scottsdale/Salt River AZ, opened Jan 2025. Breakeven at 100-110 members.
 proof3 Coaching is profitable (~$12k/month net). Jason leads online coaching.
 
 INVESTOR AUDIENCE:
@@ -829,30 +393,30 @@ ${audienceContext[type]}
 
 JIM'S WRITING VOICE:
 - Direct, honest, personal. "I" for opinions, "we" for team actions
-- Shares bad news as clearly as good news — never buries problems
-- Mixes strategic narrative with specific numbers naturally  
+- Shares bad news as clearly as good news - never buries problems
+- Mixes strategic narrative with specific numbers naturally
 - Talks to investors like partners, not spectators
 - No corporate language, no over-hedging, no formal sign-offs
 - Writes with conviction
 
 FORMAT RULES:
 - 600-700 words maximum (prose only, not counting chart JSON)
-- No bullet lists — everything flows as readable prose
+- No bullet lists - everything flows as readable prose
 - 5 chart JSON blocks embedded at appropriate points
-- 1-2 sentences of narrative before each chart explaining the "so what"
+- 1-2 sentences of narrative before each chart explaining the so-what
 - Forward-looking personal close (2-3 sentences)
 
-CHART JSON FORMAT — output charts exactly like this:
+CHART JSON FORMAT - output charts exactly like this:
 \`\`\`chart
 {
   "type": "bar",
   "title": "Descriptive title",
-  "data": [{"month": "Jan 24", "value": 50000}, ...],
+  "data": [{"month": "Jan 24", "value": 50000}],
   "series": [{"key": "value", "name": "Series Name", "color": "#1B2A4A"}]
 }
 \`\`\`
 Use "#1B2A4A" (navy) as primary color and "#C9A84C" (gold) as secondary.
-For negative values (losses), use "#C0392B" (red) in the series color.`;
+For negative values use "#C0392B" (red) in the series color.`;
 
     const userMessage = `Generate the ${typeLabels[type]} investor newsletter.
 
@@ -862,12 +426,9 @@ ${kpiData}
 ADDITIONAL MONTHLY CONTEXT:
 ${context || 'No additional context provided.'}
 
-Write the complete newsletter with 5 chart JSON blocks embedded inline. 
+Write the complete newsletter with 5 chart JSON blocks embedded inline.
 Keep prose under 700 words. Write in Jim's voice throughout.`;
 
     return { systemPrompt, userMessage };
   }
 </script>
-
-</body>
-</html>
