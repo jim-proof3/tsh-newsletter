@@ -1,5 +1,5 @@
 // Google Sheets data fetcher
-// Uses the public CSV export endpoint — no OAuth needed for sheets
+// Uses the public CSV export endpoint - no OAuth needed for sheets
 // shared with "Anyone with the link can view"
 
 const SHEET_CONFIGS = {
