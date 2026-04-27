@@ -15,8 +15,10 @@
     el.classList.add('active');
     const labels = {
       sagehouse: 'SageHouse Group Newsletter',
-      spv1: 'SPV1 Standalone Newsletter',
-      proof3: 'proof3 Group Newsletter'
+      spv1only: 'SPV1 Standalone Newsletter',
+      proof3withspv: 'proof3 Group + SPV1 Newsletter',
+      proof3withoutspv: 'proof3 Group (ex-SPV1) Newsletter',
+      allentities: 'All Entities Newsletter'
     };
     document.getElementById('outputTitle').textContent = labels[type];
     document.getElementById('headerMeta').textContent = labels[type];
@@ -48,6 +50,7 @@
     allentities: {
       sheetId: '1bKBvKEUvLXdpi3Ft5KjrBp3Vs_Xq_chn8xZAmvdso3g',
       gid: '1138458495'
+    },
     sagehouse: {
       sheetId: '1bKBvKEUvLXdpi3Ft5KjrBp3Vs_Xq_chn8xZAmvdso3g',
       gid: '932717608'
@@ -55,6 +58,7 @@
     proof3withoutspv: {
       sheetId: '1bKBvKEUvLXdpi3Ft5KjrBp3Vs_Xq_chn8xZAmvdso3g',
       gid: '1747727086'
+    },
     proof3withspv: {
       sheetId: '1bKBvKEUvLXdpi3Ft5KjrBp3Vs_Xq_chn8xZAmvdso3g',
       gid: '352846057'
@@ -88,7 +92,6 @@
 
     const rows = lines.map(parseCsvLine);
 
-    // Find header row containing month names
     const headerRowIndex = rows.findIndex(row =>
       row.some(cell => /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(cell))
     );
@@ -370,19 +373,27 @@
   function buildPrompts(type, kpiData, context) {
     const typeLabels = {
       sagehouse: 'SageHouse Group (TSH + SHC + SHA)',
-      spv1: 'SPV1 Standalone',
-      proof3: 'proof3 Group (SPV1 + Training + Coaching + Gym 1)'
+      spv1only: 'SPV1 Standalone',
+      proof3withspv: 'proof3 Group with SPV1 (SPV1 + Training + Coaching + Gym 1)',
+      proof3withoutspv: 'proof3 Group excluding SPV1 (Training + Coaching + Gym 1)',
+      allentities: 'All Entities (full portfolio rollup)'
     };
 
     const audienceContext = {
       sagehouse: `These are SageHouse Group investors. They care about total portfolio
 value, proof3 progress, advisory revenue, cash position, and whether the investment
 thesis is playing out. Do NOT detail individual proof3 operating metrics.`,
-      spv1: `These are SPV1 standalone investors. They care about SPV1 balance sheet,
+      spv1only: `These are SPV1 standalone investors. They care about SPV1 balance sheet,
 the convertible note structure, and proof3 as the underlying asset.`,
-      proof3: `These are proof3/SPV1 investors. They care EXCLUSIVELY about proof3
-operating metrics: member count, revenue, burn rate, path to profitability.
-Do NOT include broader SageHouse portfolio updates.`
+      proof3withspv: `These are proof3/SPV1 investors. They care about proof3 operating
+metrics including SPV1 as the holding entity: member count, revenue, burn rate,
+path to profitability. Do NOT include broader SageHouse portfolio updates.`,
+      proof3withoutspv: `These are proof3 operating company investors. Focus exclusively
+on the operating entities: Training, Coaching, and Gym 1. Member count, revenue
+by entity, burn rate, path to breakeven. Exclude SPV1 balance sheet items.`,
+      allentities: `This is an internal owner view across all 7 entities. Include the
+complete picture: SageHouse Group financials, SPV1 structure, proof3 operating
+metrics, intercompany flows, and total portfolio position.`
     };
 
     const systemPrompt = `You generate monthly investor newsletters for The SageHouse.
