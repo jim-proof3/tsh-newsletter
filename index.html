@@ -46,17 +46,17 @@
 
     .app {
       display: grid;
-      grid-template-columns: 340px 1fr;
+      grid-template-columns: 360px 1fr;
       min-height: calc(100vh - 60px);
     }
 
     .controls {
       background: white;
       border-right: 1px solid var(--border);
-      padding: 24px;
+      padding: 20px;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 16px;
       position: sticky;
       top: 60px;
       height: calc(100vh - 60px);
@@ -69,22 +69,22 @@
       text-transform: uppercase;
       letter-spacing: 1px;
       color: var(--muted);
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
     .type-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
+      gap: 5px;
     }
 
     .type-card {
-      padding: 10px 6px;
+      padding: 8px 4px;
       border: 2px solid var(--border);
       border-radius: 8px;
       text-align: center;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 600;
       color: var(--muted);
       line-height: 1.4;
@@ -93,53 +93,45 @@
 
     .type-card:hover { border-color: var(--navy); color: var(--navy); }
     .type-card.active { border-color: var(--navy); background: var(--navy); color: white; }
-    .type-card .icon { font-size: 18px; display: block; margin-bottom: 4px; }
+    .type-card .icon { font-size: 16px; display: block; margin-bottom: 3px; }
 
-    textarea {
+    .context-section { display: flex; flex-direction: column; gap: 8px; }
+
+    .context-field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .context-field input,
+    .context-field textarea,
+    .context-field select {
       width: 100%;
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px;
+      border-radius: 6px;
+      padding: 8px 10px;
       font-size: 12px;
       font-family: inherit;
-      resize: vertical;
-      line-height: 1.6;
       color: var(--text);
-      min-height: 160px;
       transition: border-color 0.15s;
+      background: white;
     }
 
-    textarea:focus { outline: none; border-color: var(--navy); }
+    .context-field input:focus,
+    .context-field textarea:focus,
+    .context-field select:focus { outline: none; border-color: var(--navy); }
 
-    .data-sources {
-      background: var(--light);
-      border-radius: 8px;
-      padding: 12px;
-      border: 1px solid var(--border);
-    }
+    .context-field textarea { resize: vertical; line-height: 1.5; }
 
-    .source-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 0;
-      font-size: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .source-item:last-child { border-bottom: none; }
-
-    .source-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--gold);
-      flex-shrink: 0;
-    }
+    .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
     .generate-btn {
       width: 100%;
-      padding: 14px;
+      padding: 13px;
       background: var(--navy);
       color: white;
       border: none;
@@ -148,7 +140,6 @@
       font-weight: 700;
       cursor: pointer;
       transition: all 0.15s;
-      letter-spacing: 0.3px;
     }
 
     .generate-btn:hover:not(:disabled) { background: #243a68; }
@@ -156,24 +147,25 @@
 
     .spinner {
       display: inline-block;
-      width: 14px;
-      height: 14px;
+      width: 13px;
+      height: 13px;
       border: 2px solid rgba(255,255,255,0.3);
       border-top-color: white;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin-right: 8px;
+      margin-right: 7px;
       vertical-align: middle;
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .status-bar {
-      padding: 10px 14px;
-      border-radius: 8px;
+      padding: 9px 12px;
+      border-radius: 6px;
       font-size: 12px;
       display: none;
-      margin-top: 8px;
+      margin-top: 6px;
+      line-height: 1.4;
     }
 
     .status-bar.show { display: block; }
@@ -181,27 +173,27 @@
     .status-bar.error { background: #fde8e8; color: var(--red); border: 1px solid #f5c6c6; }
     .status-bar.success { background: #e6f4ea; color: var(--green); border: 1px solid #b7dfbf; }
 
-    .output { padding: 28px 32px; }
+    .output { padding: 24px 28px; }
 
     .output-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
-    .output-title { font-size: 20px; font-weight: 700; color: var(--navy); }
+    .output-title { font-size: 18px; font-weight: 700; color: var(--navy); }
     .output-meta { font-size: 11px; color: var(--muted); }
 
     .tabs {
       display: flex;
       gap: 4px;
       border-bottom: 2px solid var(--border);
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     .tab {
-      padding: 8px 16px;
+      padding: 7px 14px;
       font-size: 13px;
       font-weight: 600;
       color: var(--muted);
@@ -217,54 +209,59 @@
     .newsletter-body {
       background: white;
       border-radius: 12px;
-      padding: 36px 40px;
+      padding: 32px 36px;
       border: 1px solid var(--border);
       max-width: 720px;
-      line-height: 1.7;
+      line-height: 1.75;
       font-size: 14px;
     }
 
-    .newsletter-body h1 { font-size: 22px; color: var(--navy); margin-bottom: 6px; font-weight: 700; }
+    .newsletter-body h1 {
+      font-size: 20px;
+      color: var(--navy);
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
 
     .newsletter-body h2 {
-      font-size: 15px;
+      font-size: 13px;
       color: var(--navy);
-      margin: 28px 0 10px;
+      margin: 24px 0 8px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.8px;
-      padding-bottom: 6px;
+      letter-spacing: 1px;
+      padding-bottom: 5px;
       border-bottom: 2px solid var(--gold);
     }
 
-    .newsletter-body p { margin-bottom: 14px; color: #333; }
+    .newsletter-body p { margin-bottom: 12px; color: #333; }
 
     .chart-embed {
-      margin: 16px 0;
-      padding: 16px;
+      margin: 14px 0;
+      padding: 14px;
       background: var(--light);
       border-radius: 8px;
       border: 1px solid var(--border);
     }
 
     .chart-label {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 10px;
+      font-weight: 700;
       color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: 0.8px;
+      letter-spacing: 1px;
       margin-bottom: 8px;
     }
 
     .export-bar {
       display: flex;
       gap: 10px;
-      margin-top: 20px;
+      margin-top: 16px;
       max-width: 720px;
     }
 
     .export-btn {
-      padding: 10px 20px;
+      padding: 9px 18px;
       border-radius: 8px;
       font-size: 13px;
       font-weight: 600;
@@ -276,45 +273,40 @@
     }
 
     .export-btn:hover { background: var(--navy); color: white; }
-
-    .export-btn.primary {
-      background: var(--gold);
-      border-color: var(--gold);
-      color: white;
-    }
-
+    .export-btn.primary { background: var(--gold); border-color: var(--gold); color: white; }
     .export-btn.primary:hover { background: #b8943a; border-color: #b8943a; }
 
-    .empty-state {
-      text-align: center;
-      padding: 80px 40px;
-      color: var(--muted);
-    }
-
-    .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
-    .empty-state p { font-size: 14px; line-height: 1.6; }
+    .empty-state { text-align: center; padding: 70px 40px; color: var(--muted); }
+    .empty-icon { font-size: 44px; margin-bottom: 14px; opacity: 0.35; }
+    .empty-state p { font-size: 13px; line-height: 1.6; }
 
     .charts-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 14px;
       max-width: 1000px;
     }
 
     .chart-card {
       background: white;
-      border-radius: 12px;
-      padding: 20px;
+      border-radius: 10px;
+      padding: 18px;
       border: 1px solid var(--border);
     }
 
     .chart-card-title {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.8px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 4px 0;
     }
   </style>
 </head>
@@ -332,60 +324,108 @@
     <div>
       <div class="panel-title">Newsletter Type</div>
       <div class="type-grid">
-        <div class="type-card active" onclick="setType('sagehouse', this)">
-          <span class="icon">🏛️</span>SageHouse<br>Group
+        <div class="type-card active" onclick="setType('tsh', this)">
+          <span class="icon">🏛️</span>TSH<br>Group
         </div>
-        <div class="type-card" onclick="setType('spv1only', this)">
+        <div class="type-card" onclick="setType('spv1', this)">
           <span class="icon">📊</span>SPV1<br>Only
         </div>
-        <div class="type-card" onclick="setType('proof3withspv', this)">
-          <span class="icon">💪</span>proof3<br>+ SPV1
+        <div class="type-card" onclick="setType('p3spv', this)">
+          <span class="icon">💪</span>p3<br>+ SPV1
         </div>
-        <div class="type-card" onclick="setType('proof3withoutspv', this)">
-          <span class="icon">🏋️</span>proof3<br>No SPV1
+        <div class="type-card" onclick="setType('p3only', this)">
+          <span class="icon">🏋️</span>p3<br>No SPV1
         </div>
-        <div class="type-card" onclick="setType('allentities', this)">
+        <div class="type-card" onclick="setType('all', this)">
           <span class="icon">🌐</span>All<br>Entities
         </div>
       </div>
     </div>
 
-    <div>
-      <div class="panel-title">Data Sources</div>
-      <div class="data-sources">
-        <div class="source-item">
-          <div class="source-dot"></div>
-          <span>All Entities Rollup</span>
+    <hr class="divider">
+
+    <!-- proof3 Operating Context -->
+    <div class="context-section">
+      <div class="panel-title">proof3 Operating Data</div>
+
+      <div class="input-row">
+        <div class="context-field">
+          <label>Members This Month</label>
+          <input type="number" id="membersNow" placeholder="e.g. 86">
         </div>
-        <div class="source-item">
-          <div class="source-dot"></div>
-          <span>Master KPI - SageHouse Group</span>
+        <div class="context-field">
+          <label>Members Last Month</label>
+          <input type="number" id="membersPrior" placeholder="e.g. 80">
         </div>
-        <div class="source-item">
-          <div class="source-dot"></div>
-          <span>Master KPI - proof3 (ex-SPV1)</span>
+      </div>
+
+      <div class="input-row">
+        <div class="context-field">
+          <label>Trial Members</label>
+          <input type="number" id="trialsNow" placeholder="e.g. 4">
         </div>
-        <div class="source-item">
-          <div class="source-dot"></div>
-          <span>Master KPI - proof3 + SPV1</span>
+        <div class="context-field">
+          <label>Members on Hold</label>
+          <input type="number" id="holdsNow" placeholder="e.g. 2">
         </div>
-        <div class="source-item">
-          <div class="source-dot"></div>
-          <span>Master KPI - SPV1 Only</span>
+      </div>
+
+      <div class="input-row">
+        <div class="context-field">
+          <label>New Members</label>
+          <input type="number" id="newMembers" placeholder="e.g. 8">
         </div>
+        <div class="context-field">
+          <label>Churned Members</label>
+          <input type="number" id="churnedMembers" placeholder="e.g. 2">
+        </div>
+      </div>
+
+      <div class="input-row">
+        <div class="context-field">
+          <label>Coaching Clients</label>
+          <input type="number" id="coachingClients" placeholder="e.g. 335">
+        </div>
+        <div class="context-field">
+          <label>Member Target</label>
+          <input type="number" id="memberTarget" placeholder="e.g. 100">
+        </div>
+      </div>
+
+      <div class="context-field">
+        <label>Member Story (name, age, specific results, their words)</label>
+        <textarea id="memberStory" rows="3" placeholder="e.g. Kirk, 47 — weight down 3.2lbs, body fat down 1.3%, muscle mass up 0.4lbs. Said: I totally get how you're so different. I LOVE it here."></textarea>
       </div>
     </div>
 
-    <div>
-      <div class="panel-title">Monthly Context</div>
-      <textarea id="context" placeholder="Add context Claude cannot see in the numbers:
+    <hr class="divider">
 
-- proof3 member count: [X], up from [Y]
-- Member story: name, age, results, quote
-- Portfolio company updates
-- Earnout collections or new investments
-- Anything unusual in the numbers"></textarea>
+    <!-- Portfolio Context -->
+    <div class="context-section">
+      <div class="panel-title">Portfolio + Other Context</div>
+
+      <div class="context-field">
+        <label>Portfolio Company Updates</label>
+        <textarea id="portfolioUpdates" rows="3" placeholder="e.g. SIQ Basketball — strong holiday season, revenue up 40% YoY. Elo Health — on track for Series A in Q2."></textarea>
+      </div>
+
+      <div class="context-field">
+        <label>Debt / Note Structure (current status)</label>
+        <textarea id="debtContext" rows="2" placeholder="e.g. SPV1 convertible notes total $378k from 4 investors at 8% simple interest. No payments due until conversion or maturity."></textarea>
+      </div>
+
+      <div class="context-field">
+        <label>Anything unusual in the numbers</label>
+        <textarea id="unusualItems" rows="2" placeholder="e.g. Cash dropped $18k this month due to equipment deposit for second gym buildout, not recurring opex."></textarea>
+      </div>
+
+      <div class="context-field">
+        <label>What Jim is focused on this month</label>
+        <textarea id="focusItems" rows="2" placeholder="e.g. Closing gym 2 lease, hitting 95 members by month end, finalizing Elo Health investment terms."></textarea>
+      </div>
     </div>
+
+    <hr class="divider">
 
     <div>
       <button class="generate-btn" id="generateBtn" onclick="generate()">
@@ -411,7 +451,7 @@
     <div id="newsletterTab">
       <div class="empty-state" id="emptyState">
         <div class="empty-icon">📰</div>
-        <p>Select a newsletter type, add your monthly context,<br>and click Generate to create your investor update.</p>
+        <p>Fill in the context fields on the left,<br>select a newsletter type, and click Generate.</p>
       </div>
       <div id="newsletterContent" style="display:none">
         <div class="newsletter-body" id="newsletterBody"></div>
@@ -430,49 +470,31 @@
 </div>
 
 <script>
-  const WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
+  var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
 
-  let currentType = 'sagehouse';
-  let currentNewsletter = '';
-  let parsedCharts = [];
-  let chartInstances = [];
+  // NEW DATA FEED SHEET — replace GIDs once you have them
+  var DATA_SHEET_ID = '1NDhm82bK-tyOtkyyZjGRB0SQpbwMeRmZ6yOazQ-BILo';
 
-  const SHEET_CONFIGS = {
-    allentities: {
-      sheetId: '1bKBvKEUvLXdpi3Ft5KjrBp3Vs_Xq_chn8xZAmvdso3g',
-      gid: '1138458495'
-    },
-    sagehouse: {
-      sheetId: '1bKBvKEUvLXdpi3Ft5KjrBp3Vs_Xq_chn8xZAmvdso3g',
-      gid: '932717608'
-    },
-    proof3withoutspv: {
-      sheetId: '1bKBvKEUvLXdpi3Ft5KjrBp3Vs_Xq_chn8xZAmvdso3g',
-      gid: '1747727086'
-    },
-    proof3withspv: {
-      sheetId: '1bKBvKEUvLXdpi3Ft5KjrBp3Vs_Xq_chn8xZAmvdso3g',
-      gid: '352846057'
-    },
-    spv1only: {
-      sheetId: '1bKBvKEUvLXdpi3Ft5KjrBp3Vs_Xq_chn8xZAmvdso3g',
-      gid: '1695455761'
-    }
+  var SHEET_CONFIGS = {
+    all:    { sheetId: DATA_SHEET_ID, gid: '0',    label: 'All Entities',             tabName: 'r/u - All Entities' },
+    tsh:    { sheetId: DATA_SHEET_ID, gid: '326443417',             label: 'TSH Group (ex-proof3)',    tabName: 'r/u - TSH w/o All p3' },
+    p3spv:  { sheetId: DATA_SHEET_ID, gid: '1633984252',     label: 'proof3 + SPV1',           tabName: 'r/u - p3 w/ SHC SPV1' },
+    p3only: { sheetId: DATA_SHEET_ID, gid: '553041294',  label: 'proof3 (ex-SPV1)',        tabName: 'r/u - p3 w/o SHC SPV1' },
+    spv1:   { sheetId: DATA_SHEET_ID, gid: '1468056005',            label: 'SHC SPV1 Only',           tabName: 'SHC SPV1-Only' }
   };
+
+  var currentType = 'tsh';
+  var currentNewsletter = '';
+  var parsedCharts = [];
+  var chartInstances = [];
 
   function setType(type, el) {
     currentType = type;
     document.querySelectorAll('.type-card').forEach(function(c) { c.classList.remove('active'); });
     el.classList.add('active');
-    var labels = {
-      sagehouse: 'SageHouse Group Newsletter',
-      spv1only: 'SPV1 Standalone Newsletter',
-      proof3withspv: 'proof3 Group + SPV1 Newsletter',
-      proof3withoutspv: 'proof3 Group (ex-SPV1) Newsletter',
-      allentities: 'All Entities Newsletter'
-    };
-    document.getElementById('outputTitle').textContent = labels[type];
-    document.getElementById('headerMeta').textContent = labels[type];
+    var config = SHEET_CONFIGS[type];
+    document.getElementById('outputTitle').textContent = config.label + ' Newsletter';
+    document.getElementById('headerMeta').textContent = config.label;
   }
 
   function switchTab(tab, el) {
@@ -491,48 +513,108 @@
     el.textContent = msg;
   }
 
-  async function fetchSheetData(newsletterType) {
-    var config = SHEET_CONFIGS[newsletterType];
-    if (!config) throw new Error('Unknown newsletter type: ' + newsletterType);
+  function getVal(id) {
+    var el = document.getElementById(id);
+    return el ? el.value.trim() : '';
+  }
+
+  function buildContextObject() {
+    var membersNow = getVal('membersNow');
+    var membersPrior = getVal('membersPrior');
+    var net = (membersNow && membersPrior) ? (parseInt(membersNow) - parseInt(membersPrior)) : null;
+
+    return {
+      gym: {
+        membersNow: membersNow,
+        membersPrior: membersPrior,
+        netChange: net !== null ? (net >= 0 ? '+' + net : '' + net) : '',
+        trials: getVal('trialsNow'),
+        holds: getVal('holdsNow'),
+        newMembers: getVal('newMembers'),
+        churned: getVal('churnedMembers'),
+        target: getVal('memberTarget'),
+        memberStory: getVal('memberStory')
+      },
+      coaching: {
+        clients: getVal('coachingClients')
+      },
+      portfolio: getVal('portfolioUpdates'),
+      debt: getVal('debtContext'),
+      unusual: getVal('unusualItems'),
+      focus: getVal('focusItems')
+    };
+  }
+
+  async function fetchSheetData(type) {
+    var config = SHEET_CONFIGS[type];
     var url = 'https://docs.google.com/spreadsheets/d/' + config.sheetId + '/export?format=csv&gid=' + config.gid;
     var response = await fetch(url);
     if (!response.ok) {
-      throw new Error('Could not read sheet. Make sure it is shared as "Anyone with the link can view". Status: ' + response.status);
+      throw new Error('Could not read sheet "' + config.tabName + '". Confirm sheet is shared as "Anyone with the link can view". HTTP ' + response.status);
     }
     var csv = await response.text();
-    return parseAndCleanCsv(csv);
+    return parseSheet(csv, config.tabName);
   }
 
-  function parseAndCleanCsv(csv) {
+  function parseSheet(csv, tabName) {
     var lines = csv.split('\n').filter(function(l) { return l.trim(); });
-    if (lines.length < 3) throw new Error('Sheet appears empty or not loaded yet.');
+    if (lines.length < 3) throw new Error('Sheet "' + tabName + '" appears empty.');
+
     var rows = lines.map(parseCsvLine);
+
+    // Find header row (row with month-like dates or metric names)
     var headerRowIndex = -1;
-    for (var i = 0; i < rows.length; i++) {
-      var found = rows[i].some(function(cell) { return /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(cell); });
-      if (found) { headerRowIndex = i; break; }
+    for (var i = 0; i < Math.min(rows.length, 15); i++) {
+      if (rows[i].some(function(c) { return /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4}/i.test(c); })) {
+        headerRowIndex = i;
+        break;
+      }
     }
-    if (headerRowIndex === -1) throw new Error('Could not find month headers. Check the Master KPI tab structure.');
-    var headers = rows[headerRowIndex];
-    var totalCols = headers.length;
-    var startCol = Math.max(1, totalCols - 12);
-    var monthHeaders = headers.slice(startCol);
-    var dataRows = rows.slice(headerRowIndex + 1).filter(function(row) { return row[0] && row[0].trim(); });
-    var table = 'Metric\t' + monthHeaders.join('\t') + '\n';
-    table += '-'.repeat(80) + '\n';
-    dataRows.forEach(function(row) {
-      var metricName = row[0];
-      var values = row.slice(startCol).map(function(v) {
-        var cleaned = v.replace(/[$,%]/g, '').trim();
-        var num = parseFloat(cleaned);
-        if (!isNaN(num) && v.includes('%')) return num.toFixed(1) + '%';
-        if (!isNaN(num) && Math.abs(num) >= 1000000) return '$' + (num / 1000000).toFixed(2) + 'M';
-        if (!isNaN(num) && Math.abs(num) >= 1000) return '$' + (num / 1000).toFixed(1) + 'k';
-        return v.trim();
-      });
-      table += metricName + '\t' + values.join('\t') + '\n';
+
+    // If no date header found, use row 0 as header
+    if (headerRowIndex === -1) headerRowIndex = 0;
+
+    // Get all data rows after header
+    var allDataRows = rows.slice(headerRowIndex + 1).filter(function(row) {
+      return row[0] && row[0].trim() && row[0].trim() !== '';
     });
-    return { table: table, rowCount: dataRows.length, colCount: monthHeaders.length };
+
+    if (allDataRows.length === 0) throw new Error('No data found in "' + tabName + '".');
+
+    // Get column headers (metric names) from header row
+    var metricHeaders = rows[headerRowIndex];
+
+    // All-time: use all rows. Last-12: use last 12.
+    var last12Rows = allDataRows.slice(-12);
+    var allTimeRows = allDataRows;
+
+    function buildTable(dataRows) {
+      var table = 'Date\t' + metricHeaders.slice(1).join('\t') + '\n';
+      table += '-'.repeat(60) + '\n';
+      dataRows.forEach(function(row) {
+        var values = row.map(function(v) {
+          var cleaned = v.replace(/[$,%]/g, '').trim();
+          var num = parseFloat(cleaned);
+          if (v === '' || v === null) return '0';
+          if (!isNaN(num) && v.includes('%')) return num.toFixed(1) + '%';
+          if (!isNaN(num) && Math.abs(num) >= 1000000) return '$' + (num / 1000000).toFixed(2) + 'M';
+          if (!isNaN(num) && Math.abs(num) >= 1000) return '$' + (num / 1000).toFixed(1) + 'k';
+          return v.trim();
+        });
+        table += values.join('\t') + '\n';
+      });
+      return table;
+    }
+
+    return {
+      tabName: tabName,
+      last12: buildTable(last12Rows),
+      allTime: buildTable(allTimeRows),
+      rowCount: allDataRows.length,
+      colCount: metricHeaders.length,
+      earliestDate: allDataRows.length > 0 ? allDataRows[0][0] : '',
+      latestDate: allDataRows.length > 0 ? allDataRows[allDataRows.length - 1][0] : ''
+    };
   }
 
   function parseCsvLine(line) {
@@ -555,29 +637,40 @@
 
   async function generate() {
     var btn = document.getElementById('generateBtn');
-    var context = document.getElementById('context').value;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Fetching sheet data...';
-    showStatus('loading', 'Reading Master KPI tab from Google Sheets...');
+    btn.innerHTML = '<span class="spinner"></span>Fetching data...';
+    showStatus('loading', 'Reading financial data from Google Sheets...');
+
     try {
       var sheetData = await fetchSheetData(currentType);
-      showStatus('loading', 'Loaded ' + sheetData.rowCount + ' metrics x ' + sheetData.colCount + ' months. Calling Claude...');
-      btn.innerHTML = '<span class="spinner"></span>Generating newsletter...';
-      var prompts = buildPrompts(currentType, sheetData.table, context);
+      var ctx = buildContextObject();
+
+      showStatus('loading', 'Data loaded (' + sheetData.rowCount + ' months, ' + sheetData.latestDate + ' through ' + sheetData.earliestDate + '). Generating newsletter...');
+      btn.innerHTML = '<span class="spinner"></span>Writing newsletter...';
+
+      var prompts = buildPrompts(currentType, sheetData, ctx);
+
       var response = await fetch(WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ system: prompts.systemPrompt, messages: [{ role: 'user', content: prompts.userMessage }] })
+        body: JSON.stringify({
+          system: prompts.system,
+          messages: [{ role: 'user', content: prompts.user }]
+        })
       });
+
       var result = await response.json();
-      if (result.error) throw new Error(result.error.message || result.error);
+      if (result.error) throw new Error(result.error.message || JSON.stringify(result.error));
+
       var text = result.content[0].text;
       currentNewsletter = text;
       parsedCharts = extractCharts(text);
       chartInstances = [];
+
       renderNewsletter(text);
-      showStatus('success', 'Done. ' + result.usage.input_tokens.toLocaleString() + ' tokens in, ' + result.usage.output_tokens.toLocaleString() + ' out.');
-      document.getElementById('outputMeta').textContent = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      showStatus('success', 'Done. ' + result.usage.input_tokens.toLocaleString() + ' in / ' + result.usage.output_tokens.toLocaleString() + ' out tokens.');
+      document.getElementById('outputMeta').textContent = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
     } catch (err) {
       showStatus('error', 'Error: ' + err.message);
     } finally {
@@ -629,7 +722,7 @@
     var match;
     while ((match = regex.exec(text)) !== null) {
       try { charts.push(JSON.parse(match[1])); }
-      catch (e) { console.warn('Chart parse error:', e); }
+      catch (e) { console.warn('Chart parse error:', e, match[1]); }
     }
     return charts;
   }
@@ -639,13 +732,13 @@
     grid.innerHTML = '';
     chartInstances = [];
     if (parsedCharts.length === 0) {
-      grid.innerHTML = '<p style="color:var(--muted)">No charts found.</p>';
+      grid.innerHTML = '<p style="color:var(--muted);padding:20px">No charts found in this newsletter.</p>';
       return;
     }
     parsedCharts.forEach(function(chart, i) {
       var card = document.createElement('div');
       card.className = 'chart-card';
-      card.innerHTML = '<div class="chart-card-title">' + (chart.title || 'Chart ' + (i + 1)) + '</div><canvas id="chart-tab-' + i + '" height="200"></canvas>';
+      card.innerHTML = '<div class="chart-card-title">' + (chart.title || 'Chart ' + (i + 1)) + '</div><canvas id="chart-tab-' + i + '" height="220"></canvas>';
       grid.appendChild(card);
       setTimeout(function() {
         var canvas = document.getElementById('chart-tab-' + i);
@@ -655,21 +748,28 @@
   }
 
   function renderSingleChart(canvas, chart) {
-    var labels = chart.data.map(function(d) { return d.month; });
-    var datasets = (chart.series || []).map(function(s) {
+    if (!chart.data || !chart.series) {
+      canvas.parentElement.innerHTML += '<p style="color:var(--muted);font-size:11px">Chart data unavailable.</p>';
+      return null;
+    }
+    var labels = chart.data.map(function(d) { return d.date || d.month || ''; });
+    var datasets = chart.series.map(function(s) {
+      var vals = chart.data.map(function(d) { return d[s.key] || 0; });
+      var isNeg = vals.every(function(v) { return v <= 0; });
+      var color = isNeg ? '#C0392B' : s.color;
       return {
         label: s.name,
-        data: chart.data.map(function(d) { return d[s.key] || 0; }),
+        data: vals,
         backgroundColor: chart.type === 'bar'
-          ? chart.data.map(function(d) { return (d[s.key] || 0) < 0 ? '#C0392B33' : s.color + '33'; })
-          : s.color + '22',
+          ? vals.map(function(v) { return v < 0 ? '#C0392B33' : color + '33'; })
+          : color + '22',
         borderColor: chart.type === 'bar'
-          ? chart.data.map(function(d) { return (d[s.key] || 0) < 0 ? '#C0392B' : s.color; })
-          : s.color,
+          ? vals.map(function(v) { return v < 0 ? '#C0392B' : color; })
+          : color,
         borderWidth: 2,
         fill: chart.type === 'area',
         tension: 0.35,
-        pointRadius: 3,
+        pointRadius: chart.data.length > 24 ? 1 : 3,
         pointHoverRadius: 5
       };
     });
@@ -682,7 +782,7 @@
           legend: {
             display: datasets.length > 1,
             position: 'bottom',
-            labels: { font: { size: 11 }, boxWidth: 12, padding: 12 }
+            labels: { font: { size: 10 }, boxWidth: 10, padding: 10 }
           },
           tooltip: {
             callbacks: {
@@ -707,7 +807,14 @@
               }
             }
           },
-          x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+          x: {
+            grid: { display: false },
+            ticks: {
+              font: { size: 9 },
+              maxTicksLimit: chart.data.length > 24 ? 12 : 24,
+              maxRotation: 45
+            }
+          }
         }
       }
     });
@@ -721,35 +828,120 @@
   }
 
   function exportToDoc() {
-    var clean = currentNewsletter.replace(/```chart[\s\S]*?```/g, '[Chart]').trim();
+    var clean = currentNewsletter.replace(/```chart[\s\S]*?```/g, '[Chart - see Charts tab]').trim();
     navigator.clipboard.writeText(clean).then(function() {
-      showStatus('success', 'Newsletter copied. Opening Google Docs - paste with Cmd+V.');
+      showStatus('success', 'Copied to clipboard. Opening Google Docs now - paste with Cmd+V.');
       setTimeout(function() { window.open('https://docs.google.com/document/create', '_blank'); }, 800);
     });
   }
 
-  function buildPrompts(type, kpiData, context) {
-    var typeLabels = {
-      sagehouse: 'SageHouse Group (TSH + SHC + SHA)',
-      spv1only: 'SPV1 Standalone',
-      proof3withspv: 'proof3 Group with SPV1 (SPV1 + Training + Coaching + Gym 1)',
-      proof3withoutspv: 'proof3 Group excluding SPV1 (Training + Coaching + Gym 1)',
-      allentities: 'All Entities (full portfolio rollup)'
+  function buildPrompts(type, sheetData, ctx) {
+    var config = SHEET_CONFIGS[type];
+
+    var audienceMap = {
+      tsh:    'SageHouse Group investors (TSH + SHC + SHA). They care about total portfolio performance, advisory revenue, cash position, and proof3 as the primary operating asset. Do NOT include detailed proof3 operating metrics - give a headline only.',
+      spv1:   'SPV1 standalone investors. They care about SPV1 balance sheet health, the convertible note structure and current status, and proof3 as the underlying asset driving value.',
+      p3spv:  'proof3/SPV1 investors. They care about proof3 operating metrics: member count and trajectory, gym revenue, coaching revenue, total burn rate, and path to profitability. Do NOT include broader SageHouse portfolio company updates.',
+      p3only: 'proof3 operating investors focused on the operating entities only (Training + Coaching + Gym 1). Member count, revenue by stream, burn, path to breakeven. Exclude SPV1 balance sheet.',
+      all:    'Internal owner view across all 7 entities. Full picture: SageHouse Group financials, SPV1 structure, proof3 operating metrics, and total portfolio position.'
     };
 
-    var audienceContext = {
-      sagehouse: 'These are SageHouse Group investors. They care about total portfolio value, proof3 progress, advisory revenue, cash position, and whether the investment thesis is playing out. Do NOT detail individual proof3 operating metrics.',
-      spv1only: 'These are SPV1 standalone investors. They care about SPV1 balance sheet, the convertible note structure, and proof3 as the underlying asset.',
-      proof3withspv: 'These are proof3/SPV1 investors. They care about proof3 operating metrics including SPV1 as the holding entity: member count, revenue, burn rate, path to profitability. Do NOT include broader SageHouse portfolio updates.',
-      proof3withoutspv: 'These are proof3 operating company investors. Focus exclusively on the operating entities: Training, Coaching, and Gym 1. Member count, revenue by entity, burn rate, path to breakeven. Exclude SPV1 balance sheet items.',
-      allentities: 'This is an internal owner view across all 7 entities. Include the complete picture: SageHouse Group financials, SPV1 structure, proof3 operating metrics, intercompany flows, and total portfolio position.'
-    };
+    // Build operating context string from structured fields
+    var gymCtx = '';
+    if (ctx.gym.membersNow) {
+      gymCtx = 'proof3 Gym 1 (Salt River) member data this month:\n';
+      gymCtx += '- Total active members: ' + ctx.gym.membersNow + '\n';
+      gymCtx += '- Prior month members: ' + (ctx.gym.membersPrior || 'not provided') + '\n';
+      gymCtx += '- Net change: ' + (ctx.gym.netChange || 'not provided') + '\n';
+      if (ctx.gym.trials) gymCtx += '- Trial members: ' + ctx.gym.trials + '\n';
+      if (ctx.gym.holds) gymCtx += '- Members on hold: ' + ctx.gym.holds + '\n';
+      if (ctx.gym.newMembers) gymCtx += '- New members joined: ' + ctx.gym.newMembers + '\n';
+      if (ctx.gym.churned) gymCtx += '- Members churned: ' + ctx.gym.churned + '\n';
+      if (ctx.gym.target) gymCtx += '- Member target: ' + ctx.gym.target + '\n';
+    }
 
-    var systemPrompt = 'You generate monthly investor newsletters for The SageHouse.\n\nENTITY STRUCTURE:\nThe SageHouse (TSH) owns SageHouse Capital (SHC) and SageHouse Advisors (SHA).\nSHC owns SageHouse Capital SPV1, which owns proof3 Training Inc (proof3 Coaching + proof3 Gym 1 Phoenix).\nTSH invests in early-stage fitness, health, and wellness technology companies.\nproof3 Gym 1 is in Scottsdale/Salt River AZ, opened Jan 2025. Breakeven at 100-110 members.\nproof3 Coaching is profitable (~$12k/month net). Jason leads online coaching.\n\nINVESTOR AUDIENCE:\n' + audienceContext[type] + '\n\nJIM\'S WRITING VOICE:\n- Direct, honest, personal. "I" for opinions, "we" for team actions\n- Shares bad news as clearly as good news - never buries problems\n- Mixes strategic narrative with specific numbers naturally\n- Talks to investors like partners, not spectators\n- No corporate language, no over-hedging, no formal sign-offs\n- Writes with conviction\n\nFORMAT RULES:\n- 600-700 words maximum (prose only, not counting chart JSON)\n- No bullet lists - everything flows as readable prose\n- 5 chart JSON blocks embedded at appropriate points\n- 1-2 sentences of narrative before each chart explaining the so-what\n- Forward-looking personal close (2-3 sentences)\n\nCHART JSON FORMAT - output charts exactly like this:\n```chart\n{\n  "type": "bar",\n  "title": "Descriptive title",\n  "data": [{"month": "Jan 24", "value": 50000}],\n  "series": [{"key": "value", "name": "Series Name", "color": "#1B2A4A"}]\n}\n```\nUse "#1B2A4A" (navy) as primary color and "#C9A84C" (gold) as secondary.\nFor negative values use "#C0392B" (red) in the series color.';
+    var storyCtx = ctx.gym.memberStory ? 'Member result to highlight this month:\n' + ctx.gym.memberStory + '\n' : '';
+    var coachCtx = ctx.coaching.clients ? 'proof3 Online Coaching active clients: ' + ctx.coaching.clients + '\n' : '';
+    var portfolioCtx = ctx.portfolio ? 'Portfolio company updates:\n' + ctx.portfolio + '\n' : '';
+    var debtCtx = ctx.debt ? 'Debt / note structure context:\n' + ctx.debt + '\n' : '';
+    var unusualCtx = ctx.unusual ? 'Unusual items in the numbers this month:\n' + ctx.unusual + '\n' : '';
+    var focusCtx = ctx.focus ? 'What Jim is focused on this month:\n' + ctx.focus + '\n' : '';
 
-    var userMessage = 'Generate the ' + typeLabels[type] + ' investor newsletter.\n\nMASTER KPI DATA (last 12 months, from Google Sheets):\n' + kpiData + '\n\nADDITIONAL MONTHLY CONTEXT:\n' + (context || 'No additional context provided.') + '\n\nWrite the complete newsletter with 5 chart JSON blocks embedded inline.\nKeep prose under 700 words. Write in Jim\'s voice throughout.';
+    var operatingContext = [gymCtx, storyCtx, coachCtx, portfolioCtx, debtCtx, unusualCtx, focusCtx]
+      .filter(function(s) { return s.trim(); })
+      .join('\n');
 
-    return { systemPrompt: systemPrompt, userMessage: userMessage };
+    var system = 'You generate monthly investor newsletters for The SageHouse.\n\n' +
+
+      'ENTITY STRUCTURE:\n' +
+      'The SageHouse LLC (TSH) owns SageHouse Capital LLC (SHC) and SageHouse Advisors LLC (SHA).\n' +
+      'SHC owns SageHouse Capital SPV1 LLC (SPV1).\n' +
+      'SPV1 owns proof3 Training Inc, which owns proof3 Coaching LLC and proof3 Gym 1 Phoenix LLC.\n' +
+      'TSH is also an investment holding company with minority positions in early-stage fitness/health/wellness tech companies.\n' +
+      'proof3 Gym 1 is in Scottsdale/Salt River AZ, opened January 2025. Gym breakeven is approximately 100-110 members.\n' +
+      'proof3 Coaching is the online coaching business and is profitable.\n' +
+      'SHC is a holding company - it does not generate operating revenue of its own.\n' +
+      'SHA generates advisory/consulting revenue and has historically been the primary revenue driver for the TSH group.\n\n' +
+
+      'INVESTOR AUDIENCE FOR THIS NEWSLETTER:\n' +
+      audienceMap[type] + '\n\n' +
+
+      'WRITING VOICE - always write as Jim, in first person:\n' +
+      '- Direct, honest, personal. Use "I" for opinions and decisions, "we" for team actions.\n' +
+      '- Share difficult news as clearly as good news. Never bury a problem.\n' +
+      '- Mix strategic narrative with specific numbers naturally inside sentences.\n' +
+      '- Talk to investors as partners who trust you - not spectators who need managing.\n' +
+      '- Never use defensive framing ("we are not hiding X", "contrary to what you might think").\n' +
+      '- Never use corporate language: leverage, synergies, stakeholders, value proposition.\n' +
+      '- Do not over-qualify with words like "somewhat", "potentially", "it appears".\n' +
+      '- Do not reference team member names (Jason, etc.) unless provided in the context below.\n' +
+      '- Do not infer or fabricate any information not present in the data or context provided.\n' +
+      '- If the data does not support a statement, do not make it.\n\n' +
+
+      'FORMAT RULES:\n' +
+      '- 600-700 words maximum (prose only, not counting chart JSON).\n' +
+      '- No bullet lists anywhere - all prose or clean visuals.\n' +
+      '- Exactly 4 chart JSON blocks, placed at natural points in the narrative.\n' +
+      '- 1-2 sentences of narrative before each chart explaining the so-what, not what the chart shows.\n' +
+      '- Forward-looking personal close, 2-3 sentences, sounds like Jim talking to a friend.\n' +
+      '- Do not end with a formal sign-off or thank you.\n\n' +
+
+      'CHART RULES - CRITICAL:\n' +
+      '- Only create charts using data explicitly present in the financial data provided below.\n' +
+      '- Do not invent, estimate, or fabricate chart data points.\n' +
+      '- Use exactly this JSON format, with "date" as the x-axis key:\n' +
+      '```chart\n' +
+      '{\n' +
+      '  "type": "bar",\n' +
+      '  "title": "Descriptive title matching the data",\n' +
+      '  "data": [{"date": "Jan 24", "value": 50000}, {"date": "Feb 24", "value": 55000}],\n' +
+      '  "series": [{"key": "value", "name": "Series label", "color": "#1B2A4A"}]\n' +
+      '}\n' +
+      '```\n' +
+      'Colors: primary "#1B2A4A" (navy), secondary "#C9A84C" (gold). Negative-dominant series: "#C0392B" (red).\n' +
+      'Chart types allowed: "bar", "line", "area". No other types.\n' +
+      'For all-time trend charts (cash, revenue since inception), include all data points available.\n' +
+      'For recent trend charts (last 12 months), use only the last 12 months of data.\n\n' +
+
+      'DATA SOURCE DESCRIPTION:\n' +
+      'Tab: ' + sheetData.tabName + '\n' +
+      'Date range: ' + sheetData.earliestDate + ' through ' + sheetData.latestDate + ' (' + sheetData.rowCount + ' months)\n' +
+      'Metrics: ' + sheetData.colCount + ' financial metrics per month\n' +
+      'All financial data has intercompany eliminations already applied where relevant.\n';
+
+    var user = 'Generate the ' + config.label + ' investor newsletter.\n\n' +
+
+      'FINANCIAL DATA (all months available - use last 12 for recent trends, all-time for inception charts):\n' +
+      sheetData.last12 + '\n\n' +
+
+      'ALL-TIME DATA FOR TREND CHARTS (use for cash position and revenue since inception):\n' +
+      sheetData.allTime + '\n\n' +
+
+      (operatingContext ? 'OPERATING CONTEXT FOR THIS MONTH:\n' + operatingContext + '\n' : 'No additional operating context provided.\n') +
+
+      '\nWrite the complete newsletter now. Include exactly 4 chart JSON blocks using only data from the financial tables above. Keep prose under 700 words. Write entirely in Jim\'s voice.';
+
+    return { system: system, user: user };
   }
 </script>
 
