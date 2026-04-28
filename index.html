@@ -136,6 +136,35 @@
       </div>
     </div>
     <hr class="divider">
+
+    <div>
+      <div class="panel-title">Date Range</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+        <select id="dateRangePreset" onchange="applyDatePreset()" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:11px;font-family:var(--font-ui);color:var(--text);background:var(--bg);cursor:pointer;">
+          <option value="all">All available data</option>
+          <option value="12" selected>Last 12 months</option>
+          <option value="24">Last 24 months</option>
+          <option value="36">Last 36 months</option>
+          <option value="ytd">Year to date</option>
+          <option value="custom">Custom range</option>
+        </select>
+      </div>
+      <div id="customDateRow" style="display:none;gap:6px;display:none;">
+        <div class="input-row">
+          <div class="context-field">
+            <label>Start Date</label>
+            <input type="month" id="dateStart" style="font-size:11px;">
+          </div>
+          <div class="context-field">
+            <label>End Date</label>
+            <input type="month" id="dateEnd" style="font-size:11px;">
+          </div>
+        </div>
+      </div>
+      <div id="dateRangeLabel" style="font-size:10px;color:var(--muted);margin-top:4px;font-family:var(--font-ui);">Using last 12 months of data</div>
+    </div>
+
+    <hr class="divider">
     <div class="context-section">
       <div class="panel-title">proof3 Gym Operations</div>
       <div class="input-row">
@@ -213,26 +242,26 @@
 
   var currentType = 'tsh';
 
-  // Primary event handler for type cards - uses delegation, no inline onclick
-  document.addEventListener('DOMContentLoaded', function() {
+  // Primary event handler for type cards - runs immediately since script is at bottom of body
+  (function attachTypeGrid() {
     var typeGrid = document.getElementById('typeGrid');
-    if (typeGrid) {
-      typeGrid.addEventListener('click', function(e) {
-        var card = e.target;
-        // Walk up to find the type-card if user clicked on icon or text inside
-        while (card && !card.getAttribute('data-type')) {
-          card = card.parentElement;
-        }
-        if (!card) return;
-        var type = card.getAttribute('data-type');
-        if (!type) return;
-        setType(type, card);
-      });
-      console.log('Type grid event listener attached');
-    } else {
-      console.error('typeGrid not found');
+    if (!typeGrid) {
+      // DOM not ready yet - shouldn't happen since script is at end of body, but just in case
+      window.addEventListener('load', attachTypeGrid);
+      return;
     }
-  });
+    typeGrid.addEventListener('click', function(e) {
+      var card = e.target;
+      // Walk up to find the type-card even if user clicked the icon or text inside it
+      while (card && card !== typeGrid) {
+        if (card.getAttribute('data-type')) break;
+        card = card.parentElement;
+      }
+      if (!card || !card.getAttribute('data-type')) return;
+      var type = card.getAttribute('data-type');
+      setType(type, card);
+    });
+  })();
   var currentNewsletter = '';
   var parsedCharts = [];
   var chartInstances = [];
@@ -281,6 +310,102 @@
   function getVal(id) {
     var el = document.getElementById(id);
     return el ? el.value.trim() : '';
+  }
+
+  // ── Date range management ─────────────────────────────────
+  function applyDatePreset() {
+    var preset = document.getElementById('dateRangePreset').value;
+    var customRow = document.getElementById('customDateRow');
+    var label = document.getElementById('dateRangeLabel');
+    var now = new Date();
+    var endYear = now.getFullYear();
+    var endMonth = now.getMonth(); // 0-indexed
+
+    if (preset === 'custom') {
+      customRow.style.display = 'flex';
+      label.textContent = 'Enter your custom date range above';
+    } else {
+      customRow.style.display = 'none';
+      if (preset === 'all') {
+        label.textContent = 'Using all available data';
+      } else if (preset === 'ytd') {
+        label.textContent = 'Using January ' + endYear + ' to present';
+      } else {
+        label.textContent = 'Using last ' + preset + ' months of data';
+      }
+    }
+  }
+
+  function getDateRange(allDataRows) {
+    var preset = document.getElementById('dateRangePreset').value;
+
+    if (preset === 'all') {
+      return { rows: allDataRows, label: 'all available data' };
+    }
+
+    if (preset === 'ytd') {
+      var thisYear = new Date().getFullYear().toString();
+      var filtered = allDataRows.filter(function(row) {
+        return row[0] && row[0].toString().includes(thisYear);
+      });
+      return { rows: filtered.length > 0 ? filtered : allDataRows.slice(-12), label: 'year to date ' + thisYear };
+    }
+
+    if (preset === 'custom') {
+      var startVal = document.getElementById('dateStart').value;
+      var endVal = document.getElementById('dateEnd').value;
+      if (!startVal || !endVal) {
+        return { rows: allDataRows.slice(-12), label: 'last 12 months (custom dates not set)' };
+      }
+      var startDate = new Date(startVal + '-01');
+      var endDate = new Date(endVal + '-01');
+      var filtered = allDataRows.filter(function(row) {
+        if (!row[0]) return false;
+        // Parse the date from the row - handles MM/DD/YYYY, YYYY-MM-DD, and text formats
+        var rowDate = parseRowDate(row[0]);
+        if (!rowDate) return false;
+        return rowDate >= startDate && rowDate <= endDate;
+      });
+      var rangeLabel = formatMonthYear(startDate) + ' to ' + formatMonthYear(endDate);
+      return { rows: filtered.length > 0 ? filtered : allDataRows, label: rangeLabel };
+    }
+
+    // Numeric presets: 12, 24, 36
+    var months = parseInt(preset);
+    return { rows: allDataRows.slice(-months), label: 'last ' + months + ' months' };
+  }
+
+  function parseRowDate(dateStr) {
+    if (!dateStr) return null;
+    var str = dateStr.toString().trim();
+    // Try MM/DD/YYYY
+    var mdy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mdy) return new Date(parseInt(mdy[3]), parseInt(mdy[1])-1, 1);
+    // Try YYYY-MM-DD
+    var ymd = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (ymd) return new Date(parseInt(ymd[1]), parseInt(ymd[2])-1, 1);
+    // Try text month (Jan 2024, January 2024)
+    var monthNames = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    var parts = str.toLowerCase().split(/[\s,]+/);
+    for (var i = 0; i < parts.length; i++) {
+      var mi = -1;
+      for (var m = 0; m < monthNames.length; m++) {
+        if (parts[i].indexOf(monthNames[m]) === 0) { mi = m; break; }
+      }
+      if (mi !== -1) {
+        var yr = null;
+        for (var j = 0; j < parts.length; j++) {
+          if (/^\d{4}$/.test(parts[j])) { yr = parts[j]; break; }
+        }
+        if (yr) return new Date(parseInt(yr), mi, 1);
+      }
+    }
+    return null;
+  }
+
+  function formatMonthYear(date) {
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[date.getMonth()] + ' ' + date.getFullYear();
   }
 
   function buildContextObject() {
@@ -355,10 +480,33 @@
       tabName: tabName,
       last12: buildTable(last12Rows),
       allTime: buildTable(allDataRows),
+      allDataRows: allDataRows,
       rowCount: allDataRows.length,
       latestDate: allDataRows.length > 0 ? allDataRows[allDataRows.length-1][0] : '',
       earliestDate: allDataRows.length > 0 ? allDataRows[0][0] : ''
     };
+  }
+
+  function buildTableFromRows(dataRows, sheetData) {
+    if (!dataRows || dataRows.length === 0) return 'No data in selected range.';
+    // Get header from allTime first line
+    var allTimeLines = sheetData.allTime.split('\n');
+    var header = allTimeLines[0]; // "Date	Metric1	Metric2..."
+    var table = header + '\n';
+    table += '------------------------------------------------------------\n';
+    dataRows.forEach(function(row) {
+      var values = row.slice(0, 30).map(function(v) {
+        var cleaned = (v || '').replace(/[$,%]/g, '').trim();
+        var num = parseFloat(cleaned);
+        if (!v) return '0';
+        if (!isNaN(num) && (v+'').includes('%')) return num.toFixed(1) + '%';
+        if (!isNaN(num) && Math.abs(num) >= 1000000) return '$' + (num/1000000).toFixed(2) + 'M';
+        if (!isNaN(num) && Math.abs(num) >= 1000) return '$' + (num/1000).toFixed(1) + 'k';
+        return (v+'').trim();
+      });
+      table += values.join('\t') + '\n';
+    });
+    return table;
   }
 
   function parseCsvLine(line) {
@@ -380,7 +528,12 @@
     try {
       var sheetData = await fetchSheetData(currentType);
       var ctx = buildContextObject();
-      showStatus('loading', 'Loaded ' + sheetData.rowCount + ' months (' + sheetData.earliestDate + ' to ' + sheetData.latestDate + '). Writing newsletter...');
+      // Apply date range filter
+      var dateRange = getDateRange(sheetData.allDataRows);
+      sheetData.filtered = dateRange.rows;
+      sheetData.filteredLabel = dateRange.label;
+
+      showStatus('loading', 'Loaded ' + sheetData.rowCount + ' months, filtering to ' + dateRange.label + '. Writing newsletter...');
       btn.innerHTML = '<span class="spinner"></span>Writing newsletter...';
       var prompts = buildPrompts(currentType, sheetData, ctx);
       var response = await fetch(WORKER_URL, {
@@ -726,22 +879,16 @@
       'Intercompany eliminations have already been applied where relevant.
 ';
 
-    var user = 'Generate the ' + config.label + ' investor newsletter.
+    var primaryData = (sheetData.filtered && sheetData.filtered.length > 0)
+      ? buildTableFromRows(sheetData.filtered, sheetData)
+      : sheetData.last12;
+    var dataLabel = sheetData.filteredLabel || 'last 12 months';
 
-' +
-      'LAST 12 MONTHS FINANCIAL DATA:
-' + sheetData.last12 + '
-
-' +
-      'ALL-TIME DATA (for inception-to-date trend charts):
-' + sheetData.allTime + '
-
-' +
-      (opCtx ? 'OPERATING CONTEXT THIS MONTH:
-' + opCtx : 'No additional operating context provided.') +
-      '
-
-Write the complete newsletter with exactly 4 chart JSON blocks. Keep prose under 700 words. Write entirely in Jim's voice.';
+    var user = 'Generate the ' + config.label + ' investor newsletter.\n\n' +
+      'FINANCIAL DATA (' + dataLabel + '):\n' + primaryData + '\n\n' +
+      'ALL-TIME DATA (for inception-to-date charts only):\n' + sheetData.allTime + '\n\n' +
+      (opCtx ? 'OPERATING CONTEXT THIS MONTH:\n' + opCtx : 'No additional operating context provided.') +
+      '\n\nWrite the complete newsletter with exactly 4 chart JSON blocks. Keep prose under 700 words. Write entirely in Jim\'s voice.';
 
     return { system: system, user: user };
   }
