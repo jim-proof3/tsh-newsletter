@@ -59,10 +59,10 @@
     .brand-bar { height: 3px; background: linear-gradient(90deg, var(--primary), var(--accent), var(--gold)); transition: background 0.3s; }
     .header-meta { font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 0.5px; }
     .app { display: grid; grid-template-columns: 360px 1fr; min-height: calc(100vh - 59px); }
-    .controls { background: var(--surface); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 59px; height: calc(100vh - 59px); overflow-y: auto; transition: background 0.3s, border-color 0.3s; }
+    .controls { background: var(--surface); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 59px; height: calc(100vh - 59px); overflow-y: auto; }
     .panel-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 6px; }
     .type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
-    .type-card { padding: 8px 4px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; font-size: 10px; font-weight: 600; color: var(--muted); line-height: 1.4; transition: all 0.15s; }
+    .type-card { padding: 8px 4px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; font-size: 10px; font-weight: 600; color: var(--muted); line-height: 1.4; transition: border-color 0.15s, color 0.15s, background 0.15s; pointer-events: all; user-select: none; -webkit-user-select: none; }
     .type-card:hover { border-color: var(--primary); color: var(--primary); }
     .type-card.active { border-color: var(--primary); background: var(--primary); color: white; }
     .type-card .icon { font-size: 15px; display: block; margin-bottom: 3px; }
@@ -125,14 +125,14 @@
 
 <div class="app">
   <aside class="controls">
-    <div>
+    <div id="typeSection">
       <div class="panel-title">Newsletter Type</div>
-      <div class="type-grid">
-        <div class="type-card active" onclick="setType('tsh', this)"><span class="icon">&#127963;</span>TSH<br>Group</div>
-        <div class="type-card" onclick="setType('spv1', this)"><span class="icon">&#128202;</span>SPV1<br>Only</div>
-        <div class="type-card" onclick="setType('p3spv', this)"><span class="icon">&#128170;</span>p3<br>+ SPV1</div>
-        <div class="type-card" onclick="setType('p3only', this)"><span class="icon">&#127947;</span>p3<br>No SPV1</div>
-        <div class="type-card" onclick="setType('all', this)"><span class="icon">&#127758;</span>All<br>Entities</div>
+      <div class="type-grid" id="typeGrid">
+        <div class="type-card active" data-type="tsh"><span class="icon">&#127963;</span>TSH<br>Group</div>
+        <div class="type-card" data-type="spv1"><span class="icon">&#128202;</span>SPV1<br>Only</div>
+        <div class="type-card" data-type="p3spv"><span class="icon">&#128170;</span>p3<br>+ SPV1</div>
+        <div class="type-card" data-type="p3only"><span class="icon">&#127947;</span>p3<br>No SPV1</div>
+        <div class="type-card" data-type="all"><span class="icon">&#127758;</span>All<br>Entities</div>
       </div>
     </div>
     <hr class="divider">
@@ -212,6 +212,27 @@
   };
 
   var currentType = 'tsh';
+
+  // Primary event handler for type cards - uses delegation, no inline onclick
+  document.addEventListener('DOMContentLoaded', function() {
+    var typeGrid = document.getElementById('typeGrid');
+    if (typeGrid) {
+      typeGrid.addEventListener('click', function(e) {
+        var card = e.target;
+        // Walk up to find the type-card if user clicked on icon or text inside
+        while (card && !card.getAttribute('data-type')) {
+          card = card.parentElement;
+        }
+        if (!card) return;
+        var type = card.getAttribute('data-type');
+        if (!type) return;
+        setType(type, card);
+      });
+      console.log('Type grid event listener attached');
+    } else {
+      console.error('typeGrid not found');
+    }
+  });
   var currentNewsletter = '';
   var parsedCharts = [];
   var chartInstances = [];
@@ -224,13 +245,21 @@
   }
 
   function setType(type, el) {
+    console.log('setType called:', type);
     currentType = type;
-    document.querySelectorAll('.type-card').forEach(function(c) { c.classList.remove('active'); });
-    el.classList.add('active');
+    // Remove active from ALL type cards in the document
+    var allCards = document.getElementsByClassName('type-card');
+    for (var i = 0; i < allCards.length; i++) {
+      allCards[i].classList.remove('active');
+    }
+    // Add active to the clicked card
+    if (el) el.classList.add('active');
     var config = SHEET_CONFIGS[type];
+    if (!config) { console.error('No config for type:', type); return; }
     document.getElementById('outputTitle').textContent = config.label + ' Newsletter';
     document.getElementById('headerMeta').textContent = config.label;
     setBrand(config.brand);
+    console.log('Brand set to:', config.brand);
   }
 
   function switchTab(tab, el) {
