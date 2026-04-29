@@ -229,472 +229,508 @@
 </div>
 
 <script>
-  var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
-  var DATA_SHEET_ID = '1NDhm82bK-tyOtkyyZjGRB0SQpbwMeRmZ6yOazQ-BILo';
+/* =============================================================
+   SAGEHOUSE NEWSLETTER GENERATOR - CLEAN JS
+   ============================================================= */
 
-  var SHEET_CONFIGS = {
-    all:    { sheetId: DATA_SHEET_ID, gid: '0',          label: 'All Entities',          tabName: 'r/u - All Entities',     brand: 'sagehouse' },
-    tsh:    { sheetId: DATA_SHEET_ID, gid: '326443417',  label: 'TSH Group (ex-proof3)', tabName: 'r/u - TSH w/o All p3',   brand: 'sagehouse' },
-    p3spv:  { sheetId: DATA_SHEET_ID, gid: '1633984252', label: 'proof3 + SPV1',         tabName: 'r/u - p3 w/ SHC SPV1',  brand: 'proof3' },
-    p3only: { sheetId: DATA_SHEET_ID, gid: '553041294',  label: 'proof3 (ex-SPV1)',      tabName: 'r/u - p3 w/o SHC SPV1', brand: 'proof3' },
-    spv1:   { sheetId: DATA_SHEET_ID, gid: '1468056005', label: 'SHC SPV1 Only',         tabName: 'SHC SPV1-Only',          brand: 'proof3' }
+var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
+var DATA_SHEET_ID = '1NDhm82bK-tyOtkyyZjGRB0SQpbwMeRmZ6yOazQ-BILo';
+
+var SHEET_CONFIGS = {
+  all:    { sheetId: DATA_SHEET_ID, gid: '0',          label: 'All Entities',          tabName: 'r/u - All Entities',     brand: 'sagehouse' },
+  tsh:    { sheetId: DATA_SHEET_ID, gid: '326443417',  label: 'TSH Group (ex-proof3)', tabName: 'r/u - TSH w/o All p3',   brand: 'sagehouse' },
+  p3spv:  { sheetId: DATA_SHEET_ID, gid: '1633984252', label: 'proof3 + SPV1',         tabName: 'r/u - p3 w/ SHC SPV1',  brand: 'proof3'    },
+  p3only: { sheetId: DATA_SHEET_ID, gid: '553041294',  label: 'proof3 (ex-SPV1)',      tabName: 'r/u - p3 w/o SHC SPV1', brand: 'proof3'    },
+  spv1:   { sheetId: DATA_SHEET_ID, gid: '1468056005', label: 'SHC SPV1 Only',         tabName: 'SHC SPV1-Only',          brand: 'proof3'    }
+};
+
+/* ── State ── */
+var currentType = 'tsh';
+var currentNewsletter = '';
+var parsedCharts = [];
+var chartInstances = [];
+var lastSheetData = null;
+
+/* ── Backtick constants (avoids parser issues) ── */
+var BT = String.fromCharCode(96);
+var CHART_FENCE_OPEN = BT + BT + BT + 'chart';
+var FENCE_CLOSE = BT + BT + BT;
+
+/* =============================================================
+   TYPE CARD SWITCHING
+   ============================================================= */
+function setType(type, cardEl) {
+  if (!SHEET_CONFIGS[type]) return;
+  currentType = type;
+
+  /* update card highlight */
+  var cards = document.getElementsByClassName('type-card');
+  for (var i = 0; i < cards.length; i++) {
+    cards[i].classList.remove('active');
+  }
+  if (cardEl) cardEl.classList.add('active');
+
+  /* update header and title */
+  var config = SHEET_CONFIGS[type];
+  var titleEl = document.getElementById('outputTitle');
+  var metaEl  = document.getElementById('headerMeta');
+  if (titleEl) titleEl.textContent = config.label + ' Newsletter';
+  if (metaEl)  metaEl.textContent  = config.label;
+
+  /* switch brand */
+  document.documentElement.setAttribute('data-brand', config.brand);
+}
+
+/* Attach click listener to the type grid - runs immediately since
+   this script is at the bottom of <body> and DOM is already ready */
+(function() {
+  var grid = document.getElementById('typeGrid');
+  if (!grid) { console.error('typeGrid not found'); return; }
+  grid.addEventListener('click', function(evt) {
+    var el = evt.target;
+    /* walk up until we hit a type-card or the grid itself */
+    while (el && el !== grid) {
+      if (el.getAttribute('data-type')) break;
+      el = el.parentElement;
+    }
+    if (!el || el === grid) return;
+    var type = el.getAttribute('data-type');
+    if (type) setType(type, el);
+  });
+})();
+
+/* =============================================================
+   TAB SWITCHING
+   ============================================================= */
+function switchTab(tab, el) {
+  var tabs = document.getElementsByClassName('tab');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  if (el) el.classList.add('active');
+
+  document.getElementById('newsletterTab').style.display = tab === 'newsletter' ? 'block' : 'none';
+  document.getElementById('chartsTab').style.display     = tab === 'charts'     ? 'block' : 'none';
+
+  if (tab === 'charts' && parsedCharts.length > 0 && chartInstances.length === 0) {
+    renderCharts();
+  }
+}
+
+/* =============================================================
+   STATUS
+   ============================================================= */
+function showStatus(type, msg) {
+  var el = document.getElementById('status');
+  if (!el) return;
+  el.className = 'status-bar show ' + type;
+  el.textContent = msg;
+}
+
+/* =============================================================
+   CONTEXT FIELDS
+   ============================================================= */
+function getVal(id) {
+  var el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+
+function buildContext() {
+  var mNow   = getVal('membersNow');
+  var mPrior = getVal('membersPrior');
+  var net    = (mNow && mPrior) ? (parseInt(mNow, 10) - parseInt(mPrior, 10)) : null;
+  return {
+    gym: {
+      membersNow:   mNow,
+      membersPrior: mPrior,
+      netChange:    net !== null ? (net >= 0 ? '+' + net : '' + net) : '',
+      trials:       getVal('trialsNow'),
+      holds:        getVal('holdsNow'),
+      newMembers:   getVal('newMembers'),
+      churned:      getVal('churnedMembers'),
+      target:       getVal('memberTarget'),
+      memberStory:  getVal('memberStory')
+    },
+    coaching:  { clients: getVal('coachingClients') },
+    portfolio: getVal('portfolioUpdates'),
+    debt:      getVal('debtContext'),
+    unusual:   getVal('unusualItems'),
+    focus:     getVal('focusItems')
   };
+}
 
-  var currentType = 'tsh';
+/* =============================================================
+   DATE RANGE
+   ============================================================= */
+function applyDatePreset() {
+  var preset   = getVal('dateRangePreset') || document.getElementById('dateRangePreset').value;
+  var customRow = document.getElementById('customDateRow');
+  var label     = document.getElementById('dateRangeLabel');
+  var isCustom  = preset === 'custom';
+  if (customRow) customRow.style.display = isCustom ? 'block' : 'none';
+  var msgs = { all: 'Using all available data', '12': 'Using last 12 months', '24': 'Using last 24 months', '36': 'Using last 36 months', ytd: 'Using year to date', custom: 'Enter dates above' };
+  if (label) label.textContent = msgs[preset] || '';
+}
 
-  // Primary event handler for type cards - runs immediately since script is at bottom of body
-  (function attachTypeGrid() {
-    var typeGrid = document.getElementById('typeGrid');
-    if (!typeGrid) {
-      // DOM not ready yet - shouldn't happen since script is at end of body, but just in case
-      window.addEventListener('load', attachTypeGrid);
-      return;
+function parseRowDate(str) {
+  if (!str) return null;
+  str = String(str).trim();
+  var mdy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) return new Date(parseInt(mdy[3], 10), parseInt(mdy[1], 10) - 1, 1);
+  var ymd = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymd) return new Date(parseInt(ymd[1], 10), parseInt(ymd[2], 10) - 1, 1);
+  var MO = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  var parts = str.toLowerCase().split(/[\s,\/\-]+/);
+  var mi = -1, yr = null;
+  for (var i = 0; i < parts.length; i++) {
+    for (var m = 0; m < MO.length; m++) {
+      if (parts[i].indexOf(MO[m]) === 0) { mi = m; break; }
     }
-    typeGrid.addEventListener('click', function(e) {
-      var card = e.target;
-      // Walk up to find the type-card even if user clicked the icon or text inside it
-      while (card && card !== typeGrid) {
-        if (card.getAttribute('data-type')) break;
-        card = card.parentElement;
+    if (/^\d{4}$/.test(parts[i])) yr = parseInt(parts[i], 10);
+  }
+  if (mi >= 0 && yr) return new Date(yr, mi, 1);
+  return null;
+}
+
+function getFilteredRows(allRows) {
+  var sel = document.getElementById('dateRangePreset');
+  var preset = sel ? sel.value : '12';
+
+  if (preset === 'all') return allRows;
+
+  if (preset === 'ytd') {
+    var yr = new Date().getFullYear();
+    var filtered = [];
+    for (var i = 0; i < allRows.length; i++) {
+      var d = parseRowDate(allRows[i][0]);
+      if (d && d.getFullYear() === yr) filtered.push(allRows[i]);
+    }
+    return filtered.length > 0 ? filtered : allRows.slice(-12);
+  }
+
+  if (preset === 'custom') {
+    var startVal = getVal('dateStart');
+    var endVal   = getVal('dateEnd');
+    if (!startVal || !endVal) return allRows.slice(-12);
+    var startD = new Date(startVal + '-01');
+    var endD   = new Date(endVal   + '-01');
+    var filtered = [];
+    for (var i = 0; i < allRows.length; i++) {
+      var d = parseRowDate(allRows[i][0]);
+      if (d && d >= startD && d <= endD) filtered.push(allRows[i]);
+    }
+    return filtered.length > 0 ? filtered : allRows;
+  }
+
+  var n = parseInt(preset, 10);
+  return isNaN(n) ? allRows.slice(-12) : allRows.slice(-n);
+}
+
+/* =============================================================
+   GOOGLE SHEETS CSV FETCH + PARSE
+   ============================================================= */
+function parseCsvLine(line) {
+  var result = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    var c = line[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function formatVal(v) {
+  if (v === null || v === undefined || v === '') return '0';
+  var s = String(v).trim();
+  var cleaned = s.replace(/[$,%]/g, '');
+  var num = parseFloat(cleaned);
+  if (isNaN(num)) return s;
+  if (s.indexOf('%') >= 0) return num.toFixed(1) + '%';
+  if (Math.abs(num) >= 1000000) return '$' + (num / 1000000).toFixed(2) + 'M';
+  if (Math.abs(num) >= 1000)    return '$' + (num / 1000).toFixed(1) + 'k';
+  return s;
+}
+
+function rowsToTable(rows, headerRow) {
+  if (!rows || rows.length === 0) return 'No data in selected range.\n';
+  var table = 'Date\t' + headerRow.slice(1, 30).join('\t') + '\n';
+  table += '------------------------------------------------------------\n';
+  for (var i = 0; i < rows.length; i++) {
+    var vals = [];
+    for (var j = 0; j < Math.min(rows[i].length, 30); j++) {
+      vals.push(formatVal(rows[i][j]));
+    }
+    table += vals.join('\t') + '\n';
+  }
+  return table;
+}
+
+async function fetchSheetData(type) {
+  var cfg = SHEET_CONFIGS[type];
+  if (!cfg) throw new Error('Unknown type: ' + type);
+
+  var url = 'https://docs.google.com/spreadsheets/d/' + cfg.sheetId +
+            '/export?format=csv&gid=' + cfg.gid;
+
+  var resp = await fetch(url);
+  if (!resp.ok) throw new Error('Sheet "' + cfg.tabName + '" returned HTTP ' + resp.status +
+    '. Make sure the sheet is shared as "Anyone with the link can view".');
+
+  var csv = await resp.text();
+  var lines = csv.split('\n').filter(function(l) { return l.trim(); });
+  if (lines.length < 3) throw new Error('Sheet "' + cfg.tabName + '" appears empty.');
+
+  var rows = lines.map(parseCsvLine);
+
+  /* find the header row (contains month-like values or metric names) */
+  var headerIdx = 0;
+  for (var i = 0; i < Math.min(rows.length, 10); i++) {
+    for (var j = 0; j < rows[i].length; j++) {
+      if (/jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{1,2}\/\d{4}/i.test(rows[i][j])) {
+        headerIdx = i; break;
       }
-      if (!card || !card.getAttribute('data-type')) return;
-      var type = card.getAttribute('data-type');
-      setType(type, card);
+    }
+    if (headerIdx === i) break;
+  }
+
+  var headerRow = rows[headerIdx];
+
+  /* data rows: everything after header that has a date-like value in col 0 */
+  var allRows = [];
+  for (var i = headerIdx + 1; i < rows.length; i++) {
+    if (rows[i][0] && /\d/.test(rows[i][0])) allRows.push(rows[i]);
+  }
+
+  if (allRows.length === 0) throw new Error('No data rows found in "' + cfg.tabName + '".');
+
+  return {
+    tabName:      cfg.tabName,
+    headerRow:    headerRow,
+    allRows:      allRows,
+    allTime:      rowsToTable(allRows, headerRow),
+    last12:       rowsToTable(allRows.slice(-12), headerRow),
+    rowCount:     allRows.length,
+    earliestDate: allRows[0][0],
+    latestDate:   allRows[allRows.length - 1][0]
+  };
+}
+
+/* =============================================================
+   GENERATE
+   ============================================================= */
+async function generate() {
+  var btn = document.getElementById('generateBtn');
+  if (!btn) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Fetching sheet data...';
+  showStatus('loading', 'Reading from Google Sheets...');
+
+  try {
+    /* 1. fetch sheet */
+    var sheetData = await fetchSheetData(currentType);
+    lastSheetData = sheetData;
+
+    /* 2. apply date filter */
+    var filteredRows = getFilteredRows(sheetData.allRows);
+    var filteredTable = rowsToTable(filteredRows, sheetData.headerRow);
+    var sel = document.getElementById('dateRangePreset');
+    var preset = sel ? sel.value : '12';
+    var rangeLabel = preset === 'all' ? 'all available data (' + sheetData.earliestDate + ' to ' + sheetData.latestDate + ')' :
+                     preset === 'ytd' ? 'year to date ' + new Date().getFullYear() :
+                     preset === 'custom' ? (getVal('dateStart') + ' to ' + getVal('dateEnd')) :
+                     'last ' + preset + ' months';
+
+    showStatus('loading', 'Loaded ' + sheetData.rowCount + ' months. Filtering to ' + rangeLabel + '. Calling Claude...');
+    btn.innerHTML = '<span class="spinner"></span>Writing newsletter...';
+
+    /* 3. build context */
+    var ctx = buildContext();
+
+    /* 4. build prompts */
+    var prompts = buildPrompts(currentType, sheetData, filteredTable, rangeLabel, ctx);
+
+    /* 5. call worker */
+    var resp = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: prompts.system,
+        messages: [{ role: 'user', content: prompts.user }]
+      })
     });
-  })();
-  var currentNewsletter = '';
-  var parsedCharts = [];
-  var chartInstances = [];
 
-  var CHART_OPEN = String.fromCharCode(96) + String.fromCharCode(96) + String.fromCharCode(96) + 'chart';
-  var CLOSE = String.fromCharCode(96) + String.fromCharCode(96) + String.fromCharCode(96);
+    if (!resp.ok) throw new Error('Worker returned HTTP ' + resp.status);
 
-  function setBrand(brand) {
-    document.documentElement.setAttribute('data-brand', brand);
-  }
+    var result = await resp.json();
+    if (result.error) throw new Error(result.error.message || JSON.stringify(result.error));
+    if (!result.content || !result.content[0]) throw new Error('Empty response from Claude API');
 
-  function setType(type, el) {
-    console.log('setType called:', type);
-    currentType = type;
-    // Remove active from ALL type cards in the document
-    var allCards = document.getElementsByClassName('type-card');
-    for (var i = 0; i < allCards.length; i++) {
-      allCards[i].classList.remove('active');
-    }
-    // Add active to the clicked card
-    if (el) el.classList.add('active');
-    var config = SHEET_CONFIGS[type];
-    if (!config) { console.error('No config for type:', type); return; }
-    document.getElementById('outputTitle').textContent = config.label + ' Newsletter';
-    document.getElementById('headerMeta').textContent = config.label;
-    setBrand(config.brand);
-    console.log('Brand set to:', config.brand);
-  }
-
-  function switchTab(tab, el) {
-    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-    el.classList.add('active');
-    document.getElementById('newsletterTab').style.display = tab === 'newsletter' ? 'block' : 'none';
-    document.getElementById('chartsTab').style.display = tab === 'charts' ? 'block' : 'none';
-    if (tab === 'charts' && parsedCharts.length > 0 && chartInstances.length === 0) {
-      renderCharts();
-    }
-  }
-
-  function showStatus(type, msg) {
-    var el = document.getElementById('status');
-    el.className = 'status-bar show ' + type;
-    el.textContent = msg;
-  }
-
-  function getVal(id) {
-    var el = document.getElementById(id);
-    return el ? el.value.trim() : '';
-  }
-
-  // ── Date range management ─────────────────────────────────
-  function applyDatePreset() {
-    var preset = document.getElementById('dateRangePreset').value;
-    var customRow = document.getElementById('customDateRow');
-    var label = document.getElementById('dateRangeLabel');
-    var now = new Date();
-    var endYear = now.getFullYear();
-    var endMonth = now.getMonth(); // 0-indexed
-
-    if (preset === 'custom') {
-      customRow.style.display = 'flex';
-      label.textContent = 'Enter your custom date range above';
-    } else {
-      customRow.style.display = 'none';
-      if (preset === 'all') {
-        label.textContent = 'Using all available data';
-      } else if (preset === 'ytd') {
-        label.textContent = 'Using January ' + endYear + ' to present';
-      } else {
-        label.textContent = 'Using last ' + preset + ' months of data';
-      }
-    }
-  }
-
-  function getDateRange(allDataRows) {
-    var preset = document.getElementById('dateRangePreset').value;
-
-    if (preset === 'all') {
-      return { rows: allDataRows, label: 'all available data' };
-    }
-
-    if (preset === 'ytd') {
-      var thisYear = new Date().getFullYear().toString();
-      var filtered = allDataRows.filter(function(row) {
-        return row[0] && row[0].toString().includes(thisYear);
-      });
-      return { rows: filtered.length > 0 ? filtered : allDataRows.slice(-12), label: 'year to date ' + thisYear };
-    }
-
-    if (preset === 'custom') {
-      var startVal = document.getElementById('dateStart').value;
-      var endVal = document.getElementById('dateEnd').value;
-      if (!startVal || !endVal) {
-        return { rows: allDataRows.slice(-12), label: 'last 12 months (custom dates not set)' };
-      }
-      var startDate = new Date(startVal + '-01');
-      var endDate = new Date(endVal + '-01');
-      var filtered = allDataRows.filter(function(row) {
-        if (!row[0]) return false;
-        // Parse the date from the row - handles MM/DD/YYYY, YYYY-MM-DD, and text formats
-        var rowDate = parseRowDate(row[0]);
-        if (!rowDate) return false;
-        return rowDate >= startDate && rowDate <= endDate;
-      });
-      var rangeLabel = formatMonthYear(startDate) + ' to ' + formatMonthYear(endDate);
-      return { rows: filtered.length > 0 ? filtered : allDataRows, label: rangeLabel };
-    }
-
-    // Numeric presets: 12, 24, 36
-    var months = parseInt(preset);
-    return { rows: allDataRows.slice(-months), label: 'last ' + months + ' months' };
-  }
-
-  function parseRowDate(dateStr) {
-    if (!dateStr) return null;
-    var str = dateStr.toString().trim();
-    // Try MM/DD/YYYY
-    var mdy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (mdy) return new Date(parseInt(mdy[3]), parseInt(mdy[1])-1, 1);
-    // Try YYYY-MM-DD
-    var ymd = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (ymd) return new Date(parseInt(ymd[1]), parseInt(ymd[2])-1, 1);
-    // Try text month (Jan 2024, January 2024)
-    var monthNames = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-    var parts = str.toLowerCase().split(/[\s,]+/);
-    for (var i = 0; i < parts.length; i++) {
-      var mi = -1;
-      for (var m = 0; m < monthNames.length; m++) {
-        if (parts[i].indexOf(monthNames[m]) === 0) { mi = m; break; }
-      }
-      if (mi !== -1) {
-        var yr = null;
-        for (var j = 0; j < parts.length; j++) {
-          if (/^\d{4}$/.test(parts[j])) { yr = parts[j]; break; }
-        }
-        if (yr) return new Date(parseInt(yr), mi, 1);
-      }
-    }
-    return null;
-  }
-
-  function formatMonthYear(date) {
-    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return months[date.getMonth()] + ' ' + date.getFullYear();
-  }
-
-  function buildContextObject() {
-    var membersNow = getVal('membersNow');
-    var membersPrior = getVal('membersPrior');
-    var net = (membersNow && membersPrior) ? (parseInt(membersNow) - parseInt(membersPrior)) : null;
-    return {
-      gym: {
-        membersNow: membersNow, membersPrior: membersPrior,
-        netChange: net !== null ? (net >= 0 ? '+' + net : '' + net) : '',
-        trials: getVal('trialsNow'), holds: getVal('holdsNow'),
-        newMembers: getVal('newMembers'), churned: getVal('churnedMembers'),
-        target: getVal('memberTarget'), memberStory: getVal('memberStory')
-      },
-      coaching: { clients: getVal('coachingClients') },
-      portfolio: getVal('portfolioUpdates'),
-      debt: getVal('debtContext'),
-      unusual: getVal('unusualItems'),
-      focus: getVal('focusItems')
-    };
-  }
-
-  async function fetchSheetData(type) {
-    var config = SHEET_CONFIGS[type];
-    var url = 'https://docs.google.com/spreadsheets/d/' + config.sheetId + '/export?format=csv&gid=' + config.gid;
-    var response = await fetch(url);
-    if (!response.ok) throw new Error('Could not read "' + config.tabName + '". Confirm sheet is shared publicly. HTTP ' + response.status);
-    var csv = await response.text();
-    return parseSheet(csv, config.tabName);
-  }
-
-  function parseSheet(csv, tabName) {
-    var lines = csv.split('
-').filter(function(l) { return l.trim(); });
-    if (lines.length < 3) throw new Error('Sheet "' + tabName + '" appears empty.');
-    var rows = lines.map(parseCsvLine);
-    var headerRowIndex = 0;
-    for (var i = 0; i < Math.min(rows.length, 10); i++) {
-      if (rows[i].some(function(c) { return /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{1,2}\/\d{4}/i.test(c); })) {
-        headerRowIndex = i; break;
-      }
-    }
-    var metricHeaders = rows[headerRowIndex];
-    var allDataRows = rows.slice(headerRowIndex + 1).filter(function(row) {
-      return row[0] && row[0].trim() && /\d/.test(row[0]);
-    });
-    if (allDataRows.length === 0) throw new Error('No data rows in "' + tabName + '".');
-    var last12Rows = allDataRows.slice(-12);
-
-    function buildTable(dataRows) {
-      var table = 'Date	' + metricHeaders.slice(1, 30).join('	') + '
-';
-      table += '------------------------------------------------------------
-';
-      dataRows.forEach(function(row) {
-        var values = row.slice(0, 30).map(function(v) {
-          var cleaned = v.replace(/[$,%]/g, '').trim();
-          var num = parseFloat(cleaned);
-          if (!v) return '0';
-          if (!isNaN(num) && v.includes('%')) return num.toFixed(1) + '%';
-          if (!isNaN(num) && Math.abs(num) >= 1000000) return '$' + (num/1000000).toFixed(2) + 'M';
-          if (!isNaN(num) && Math.abs(num) >= 1000) return '$' + (num/1000).toFixed(1) + 'k';
-          return v.trim();
-        });
-        table += values.join('	') + '
-';
-      });
-      return table;
-    }
-
-    return {
-      tabName: tabName,
-      last12: buildTable(last12Rows),
-      allTime: buildTable(allDataRows),
-      allDataRows: allDataRows,
-      rowCount: allDataRows.length,
-      latestDate: allDataRows.length > 0 ? allDataRows[allDataRows.length-1][0] : '',
-      earliestDate: allDataRows.length > 0 ? allDataRows[0][0] : ''
-    };
-  }
-
-  function buildTableFromRows(dataRows, sheetData) {
-    if (!dataRows || dataRows.length === 0) return 'No data in selected range.';
-    // Get header from allTime first line
-    var allTimeLines = sheetData.allTime.split('\n');
-    var header = allTimeLines[0]; // "Date	Metric1	Metric2..."
-    var table = header + '\n';
-    table += '------------------------------------------------------------\n';
-    dataRows.forEach(function(row) {
-      var values = row.slice(0, 30).map(function(v) {
-        var cleaned = (v || '').replace(/[$,%]/g, '').trim();
-        var num = parseFloat(cleaned);
-        if (!v) return '0';
-        if (!isNaN(num) && (v+'').includes('%')) return num.toFixed(1) + '%';
-        if (!isNaN(num) && Math.abs(num) >= 1000000) return '$' + (num/1000000).toFixed(2) + 'M';
-        if (!isNaN(num) && Math.abs(num) >= 1000) return '$' + (num/1000).toFixed(1) + 'k';
-        return (v+'').trim();
-      });
-      table += values.join('\t') + '\n';
-    });
-    return table;
-  }
-
-  function parseCsvLine(line) {
-    var result = [], current = '', inQuotes = false;
-    for (var i = 0; i < line.length; i++) {
-      if (line[i] === '"') { inQuotes = !inQuotes; }
-      else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
-      else { current += line[i]; }
-    }
-    result.push(current.trim());
-    return result;
-  }
-
-  async function generate() {
-    var btn = document.getElementById('generateBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Fetching data...';
-    showStatus('loading', 'Reading financial data from Google Sheets...');
-    try {
-      var sheetData = await fetchSheetData(currentType);
-      var ctx = buildContextObject();
-      // Apply date range filter
-      var dateRange = getDateRange(sheetData.allDataRows);
-      sheetData.filtered = dateRange.rows;
-      sheetData.filteredLabel = dateRange.label;
-
-      showStatus('loading', 'Loaded ' + sheetData.rowCount + ' months, filtering to ' + dateRange.label + '. Writing newsletter...');
-      btn.innerHTML = '<span class="spinner"></span>Writing newsletter...';
-      var prompts = buildPrompts(currentType, sheetData, ctx);
-      var response = await fetch(WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ system: prompts.system, messages: [{ role: 'user', content: prompts.user }] })
-      });
-      var result = await response.json();
-      if (result.error) throw new Error(result.error.message || JSON.stringify(result.error));
-      var text = result.content[0].text;
-      currentNewsletter = text;
-      parsedCharts = extractCharts(text);
-      chartInstances = [];
-      renderNewsletter(text);
-      showStatus('success', 'Done: ' + result.usage.input_tokens.toLocaleString() + ' in / ' + result.usage.output_tokens.toLocaleString() + ' out tokens.');
-      document.getElementById('outputMeta').textContent = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    } catch (err) {
-      showStatus('error', 'Error: ' + err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Generate Newsletter';
-    }
-  }
-
-  function extractCharts(text) {
-    var charts = [];
-    var searchStr = CHART_OPEN;
-    var closeStr = CLOSE;
-    var pos = 0;
-    while (true) {
-      var start = text.indexOf(searchStr, pos);
-      if (start === -1) break;
-      var jsonStart = text.indexOf('
-', start) + 1;
-      var end = text.indexOf(closeStr, jsonStart);
-      if (end === -1) break;
-      var jsonStr = text.substring(jsonStart, end).trim();
-      try {
-        charts.push(JSON.parse(jsonStr));
-      } catch(e) {
-        console.warn('Chart parse error:', jsonStr.substring(0, 80));
-      }
-      pos = end + 3;
-    }
-    return charts;
-  }
-
-  function renderNewsletter(text) {
-    document.getElementById('emptyState').style.display = 'none';
-    document.getElementById('newsletterContent').style.display = 'block';
-    var body = document.getElementById('newsletterBody');
-    var chartIndex = 0;
-    var html = '';
-    var searchStr = CHART_OPEN;
-    var closeStr = CLOSE;
-    var pos = 0;
-    var lastPos = 0;
-    while (true) {
-      var start = text.indexOf(searchStr, pos);
-      if (start === -1) {
-        html += markdownToHtml(text.substring(lastPos));
-        break;
-      }
-      html += markdownToHtml(text.substring(lastPos, start));
-      var end = text.indexOf(closeStr, start + searchStr.length);
-      if (end === -1) break;
-      var id = 'chart-inline-' + chartIndex;
-      chartIndex++;
-      html += '<div class="chart-embed"><div class="chart-label">Chart ' + chartIndex + '</div><canvas id="' + id + '" height="180"></canvas></div>';
-      lastPos = end + closeStr.length;
-      pos = lastPos;
-    }
-    body.innerHTML = html;
-    setTimeout(function() {
-      parsedCharts.forEach(function(chart, i) {
-        var canvas = document.getElementById('chart-inline-' + i);
-        if (canvas) renderSingleChart(canvas, chart);
-      });
-    }, 50);
-  }
-
-  function markdownToHtml(text) {
-    return text
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/
-
-+/g, '</p><p>')
-      .replace(/^(?!<[h|p])(.+)$/gm, '<p>$1</p>')
-      .replace(/<p><\/p>/g, '')
-      .trim();
-  }
-
-  function getChartColors() {
-    var brand = document.documentElement.getAttribute('data-brand');
-    return brand === 'proof3'
-      ? { primary: '#3d9cb5', secondary: '#a8d4e0' }
-      : { primary: '#13474A', secondary: '#F1CC6C' };
-  }
-
-  function renderCharts() {
-    var grid = document.getElementById('chartsGrid');
-    grid.innerHTML = '';
+    var text = result.content[0].text;
+    currentNewsletter = text;
+    parsedCharts = extractCharts(text);
     chartInstances = [];
-    if (parsedCharts.length === 0) {
-      grid.innerHTML = '<p style="color:var(--muted);padding:20px">No charts found.</p>';
-      return;
+
+    renderNewsletter(text);
+
+    var usage = result.usage || {};
+    showStatus('success', 'Done. ' +
+      (usage.input_tokens  ? usage.input_tokens.toLocaleString()  + ' in / ' : '') +
+      (usage.output_tokens ? usage.output_tokens.toLocaleString() + ' out tokens.' : 'Complete.'));
+
+    document.getElementById('outputMeta').textContent =
+      new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  } catch (err) {
+    console.error('Generate error:', err);
+    showStatus('error', 'Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate Newsletter';
+  }
+}
+
+/* =============================================================
+   RENDER NEWSLETTER
+   ============================================================= */
+function extractCharts(text) {
+  var charts = [];
+  var pos = 0;
+  while (true) {
+    var start = text.indexOf(CHART_FENCE_OPEN, pos);
+    if (start === -1) break;
+    var jsonStart = text.indexOf('\n', start);
+    if (jsonStart === -1) break;
+    jsonStart += 1;
+    var end = text.indexOf(FENCE_CLOSE, jsonStart);
+    if (end === -1) break;
+    var jsonStr = text.substring(jsonStart, end).trim();
+    try { charts.push(JSON.parse(jsonStr)); }
+    catch (e) { console.warn('Chart JSON parse error at pos ' + start + ':', jsonStr.substring(0, 80)); }
+    pos = end + FENCE_CLOSE.length;
+  }
+  return charts;
+}
+
+function markdownToHtml(text) {
+  return text
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\n\n+/g, '</p><p>')
+    .replace(/^(?!<[hp])(.+)$/gm, '<p>$1</p>')
+    .replace(/<p><\/p>/g, '')
+    .trim();
+}
+
+function renderNewsletter(text) {
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('newsletterContent').style.display = 'block';
+
+  var body = document.getElementById('newsletterBody');
+  var chartIdx = 0;
+  var html = '';
+  var pos = 0;
+
+  while (true) {
+    var start = text.indexOf(CHART_FENCE_OPEN, pos);
+    if (start === -1) {
+      html += markdownToHtml(text.substring(pos));
+      break;
     }
-    parsedCharts.forEach(function(chart, i) {
+    html += markdownToHtml(text.substring(pos, start));
+    var end = text.indexOf(FENCE_CLOSE, start + CHART_FENCE_OPEN.length);
+    if (end === -1) { html += markdownToHtml(text.substring(pos)); break; }
+    var id = 'chart-inline-' + chartIdx;
+    chartIdx++;
+    html += '<div class="chart-embed"><div class="chart-label">Chart ' + chartIdx +
+            '</div><canvas id="' + id + '" height="180"></canvas></div>';
+    pos = end + FENCE_CLOSE.length;
+  }
+
+  body.innerHTML = html;
+
+  setTimeout(function() {
+    for (var i = 0; i < parsedCharts.length; i++) {
+      var canvas = document.getElementById('chart-inline-' + i);
+      if (canvas) renderSingleChart(canvas, parsedCharts[i]);
+    }
+  }, 60);
+}
+
+/* =============================================================
+   CHARTS
+   ============================================================= */
+function getColors() {
+  var brand = document.documentElement.getAttribute('data-brand');
+  return brand === 'proof3'
+    ? { primary: '#3d9cb5', secondary: '#a8d4e0', grid: '#2d3f52' }
+    : { primary: '#13474A', secondary: '#F1CC6C', grid: '#ede8e0' };
+}
+
+function renderCharts() {
+  var grid = document.getElementById('chartsGrid');
+  grid.innerHTML = '';
+  chartInstances = [];
+  if (parsedCharts.length === 0) {
+    grid.innerHTML = '<p style="color:var(--muted);padding:20px">No charts in this newsletter.</p>';
+    return;
+  }
+  for (var i = 0; i < parsedCharts.length; i++) {
+    (function(chart, idx) {
       var card = document.createElement('div');
       card.className = 'chart-card';
-      card.innerHTML = '<div class="chart-card-title">' + (chart.title || 'Chart ' + (i+1)) + '</div><canvas id="chart-tab-' + i + '" height="220"></canvas>';
+      card.innerHTML = '<div class="chart-card-title">' + (chart.title || 'Chart ' + (idx + 1)) +
+                       '</div><canvas id="chart-tab-' + idx + '" height="220"></canvas>';
       grid.appendChild(card);
       setTimeout(function() {
-        var canvas = document.getElementById('chart-tab-' + i);
-        if (canvas) chartInstances.push(renderSingleChart(canvas, chart));
-      }, 50);
-    });
+        var c = document.getElementById('chart-tab-' + idx);
+        if (c) chartInstances.push(renderSingleChart(c, chart));
+      }, 60);
+    })(parsedCharts[i], i);
   }
+}
 
-  function renderSingleChart(canvas, chart) {
-    if (!chart || !chart.data || !chart.series) {
-      return null;
-    }
-    var colors = getChartColors();
-    var gridColor = document.documentElement.getAttribute('data-brand') === 'proof3' ? '#2d3f52' : '#ede8e0';
-    var labels = chart.data.map(function(d) { return d.date || d.month || ''; });
-    var datasets = chart.series.map(function(s, si) {
-      var color = s.color || (si === 0 ? colors.primary : colors.secondary);
-      var vals = chart.data.map(function(d) { return d[s.key] || 0; });
-      return {
-        label: s.name,
-        data: vals,
-        backgroundColor: chart.type === 'bar'
-          ? vals.map(function(v) { return v < 0 ? '#C0392B33' : color + '33'; })
-          : color + '22',
-        borderColor: chart.type === 'bar'
-          ? vals.map(function(v) { return v < 0 ? '#C0392B' : color; })
-          : color,
-        borderWidth: 2,
-        fill: chart.type === 'area',
-        tension: 0.35,
-        pointRadius: chart.data.length > 24 ? 1 : 3,
-        pointHoverRadius: 5
-      };
-    });
+function renderSingleChart(canvas, chart) {
+  if (!chart || !chart.data || !chart.series || chart.data.length === 0) return null;
+  var colors = getColors();
+  var labels = chart.data.map(function(d) { return d.date || d.month || ''; });
+  var datasets = chart.series.map(function(s, si) {
+    var color = s.color || (si === 0 ? colors.primary : colors.secondary);
+    var vals  = chart.data.map(function(d) { return d[s.key] || 0; });
+    var isBar = chart.type === 'bar';
+    return {
+      label:           s.name,
+      data:            vals,
+      backgroundColor: isBar ? vals.map(function(v) { return v < 0 ? '#C0392B33' : color + '33'; }) : color + '22',
+      borderColor:     isBar ? vals.map(function(v) { return v < 0 ? '#C0392B'   : color;         }) : color,
+      borderWidth:     2,
+      fill:            chart.type === 'area',
+      tension:         0.35,
+      pointRadius:     chart.data.length > 24 ? 1 : 3,
+      pointHoverRadius: 5
+    };
+  });
+
+  try {
     return new Chart(canvas, {
       type: chart.type === 'area' ? 'line' : (chart.type || 'bar'),
       data: { labels: labels, datasets: datasets },
       options: {
         responsive: true,
         plugins: {
-          legend: { display: datasets.length > 1, position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, padding: 10 } },
+          legend: {
+            display: datasets.length > 1,
+            position: 'bottom',
+            labels: { font: { size: 10 }, boxWidth: 10, padding: 10 }
+          },
           tooltip: {
             callbacks: {
               label: function(ctx) {
                 var v = ctx.parsed.y;
                 if (Math.abs(v) >= 1000000) return ctx.dataset.label + ': $' + (v/1000000).toFixed(2) + 'M';
-                if (Math.abs(v) >= 1000) return ctx.dataset.label + ': $' + (v/1000).toFixed(1) + 'k';
+                if (Math.abs(v) >= 1000)    return ctx.dataset.label + ': $' + (v/1000).toFixed(1) + 'k';
                 return ctx.dataset.label + ': ' + v;
               }
             }
@@ -702,196 +738,161 @@
         },
         scales: {
           y: {
-            grid: { color: gridColor },
+            grid: { color: colors.grid },
             ticks: {
               font: { size: 10 },
               callback: function(v) {
                 if (Math.abs(v) >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
-                if (Math.abs(v) >= 1000) return '$' + (v/1000).toFixed(0) + 'k';
+                if (Math.abs(v) >= 1000)    return '$' + (v/1000).toFixed(0) + 'k';
                 return v;
               }
             }
           },
-          x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: chart.data.length > 24 ? 12 : 24, maxRotation: 45 } }
+          x: {
+            grid: { display: false },
+            ticks: { font: { size: 9 }, maxTicksLimit: chart.data.length > 24 ? 12 : 24, maxRotation: 45 }
+          }
         }
       }
     });
+  } catch (e) {
+    console.error('Chart render error:', e);
+    return null;
   }
+}
 
-  function copyNewsletter() {
-    var clean = currentNewsletter;
-    var searchStr = CHART_OPEN;
-    var closeStr = CLOSE;
-    var result = '';
-    var pos = 0;
-    while (true) {
-      var start = clean.indexOf(searchStr, pos);
-      if (start === -1) { result += clean.substring(pos); break; }
-      result += clean.substring(pos, start);
-      var end = clean.indexOf(closeStr, start + searchStr.length);
-      if (end === -1) break;
-      pos = end + closeStr.length;
-    }
-    navigator.clipboard.writeText(result.trim()).then(function() {
-      showStatus('success', 'Newsletter text copied to clipboard.');
-    });
+/* =============================================================
+   EXPORT
+   ============================================================= */
+function stripCharts(text) {
+  var result = '';
+  var pos = 0;
+  while (true) {
+    var start = text.indexOf(CHART_FENCE_OPEN, pos);
+    if (start === -1) { result += text.substring(pos); break; }
+    result += text.substring(pos, start);
+    var end = text.indexOf(FENCE_CLOSE, start + CHART_FENCE_OPEN.length);
+    if (end === -1) break;
+    pos = end + FENCE_CLOSE.length;
   }
+  return result.trim();
+}
 
-  function exportToDoc() {
-    copyNewsletter();
+function copyNewsletter() {
+  navigator.clipboard.writeText(stripCharts(currentNewsletter)).then(function() {
+    showStatus('success', 'Newsletter text copied to clipboard.');
+  }).catch(function() {
+    showStatus('error', 'Copy failed. Try selecting the text manually.');
+  });
+}
+
+function exportToDoc() {
+  navigator.clipboard.writeText(stripCharts(currentNewsletter)).then(function() {
     showStatus('success', 'Copied. Opening Google Docs - paste with Cmd+V.');
     setTimeout(function() { window.open('https://docs.google.com/document/create', '_blank'); }, 800);
+  }).catch(function() {
+    showStatus('error', 'Copy failed.');
+  });
+}
+
+/* =============================================================
+   PROMPT BUILDER
+   ============================================================= */
+function buildPrompts(type, sheetData, filteredTable, rangeLabel, ctx) {
+  var cfg = SHEET_CONFIGS[type];
+  var chartFenceOpen = CHART_FENCE_OPEN;
+  var fenceClose     = FENCE_CLOSE;
+
+  var audienceMap = {
+    tsh:    'SageHouse Group investors (TSH + SHC + SHA). They care about total portfolio performance, advisory revenue, cash position, and proof3 as the primary operating asset. Give proof3 a headline update only - do not go into detailed proof3 operating metrics.',
+    spv1:   'SPV1 standalone investors. They care about SPV1 balance sheet health, the convertible note structure and current status, and proof3 as the underlying asset driving value.',
+    p3spv:  'proof3 and SPV1 investors. They care about proof3 operating metrics: member count and trajectory, gym revenue, coaching revenue, total burn rate, and path to profitability. Do NOT include broader SageHouse portfolio company updates.',
+    p3only: 'proof3 operating investors (Training + Coaching + Gym 1 only). Member count, revenue by stream, burn rate, path to breakeven. Exclude SPV1 balance sheet entirely.',
+    all:    'Internal owner view across all 7 entities. Include the full picture: SageHouse Group financials, SPV1 structure, proof3 operating metrics, and total portfolio position.'
+  };
+
+  /* build operating context string */
+  var lines = [];
+  var g = ctx.gym;
+  if (g.membersNow) {
+    lines.push('proof3 Gym 1 (Salt River) member data this month:');
+    lines.push('  Active members: ' + g.membersNow + ' (prior month: ' + (g.membersPrior || 'n/a') + ', net: ' + (g.netChange || 'n/a') + ')');
+    if (g.trials)     lines.push('  Trial members: ' + g.trials);
+    if (g.holds)      lines.push('  On hold: ' + g.holds);
+    if (g.newMembers) lines.push('  New this month: ' + g.newMembers);
+    if (g.churned)    lines.push('  Churned: ' + g.churned);
+    if (g.target)     lines.push('  Member target: ' + g.target);
   }
+  if (g.memberStory)       lines.push('\nMember result story:\n' + g.memberStory);
+  if (ctx.coaching.clients) lines.push('\nproof3 Online Coaching active clients: ' + ctx.coaching.clients);
+  if (ctx.portfolio)        lines.push('\nPortfolio company updates:\n' + ctx.portfolio);
+  if (ctx.debt)             lines.push('\nCurrent debt/note structure:\n' + ctx.debt);
+  if (ctx.unusual)          lines.push('\nUnusual items in the numbers:\n' + ctx.unusual);
+  if (ctx.focus)            lines.push('\nJim is focused on this month:\n' + ctx.focus);
+  var opCtx = lines.join('\n');
 
-  function buildPrompts(type, sheetData, ctx) {
-    var config = SHEET_CONFIGS[type];
-    var backtick = String.fromCharCode(96);
-    var tripleBacktick = backtick + backtick + backtick;
+  var chartColorNote = (type === 'tsh' || type === 'all')
+    ? '"#13474A" (teal) as primary, "#F1CC6C" (gold) as secondary'
+    : '"#3d9cb5" (blue) as primary, "#a8d4e0" (light blue) as secondary';
 
-    var audienceMap = {
-      tsh:    'SageHouse Group investors (TSH + SHC + SHA). They care about total portfolio performance, advisory revenue, cash position, and proof3 as the primary operating asset. Give proof3 a headline update only - do not include detailed proof3 operating metrics.',
-      spv1:   'SPV1 standalone investors. They care about SPV1 balance sheet health, the convertible note structure and current status, and proof3 as the underlying asset.',
-      p3spv:  'proof3/SPV1 investors. Member count and trajectory, gym revenue, coaching revenue, total burn rate, path to profitability. Do NOT include broader SageHouse portfolio updates.',
-      p3only: 'proof3 operating investors (Training + Coaching + Gym 1). Member count, revenue by stream, burn, path to breakeven. Exclude SPV1 balance sheet entirely.',
-      all:    'Internal owner view across all 7 entities. Full picture including SageHouse Group financials, SPV1 structure, proof3 operating metrics, and total portfolio position.'
-    };
+  var chartExample = chartFenceOpen + '\n' +
+    '{"type":"bar","title":"Descriptive title","data":[{"date":"Jan 24","value":50000},{"date":"Feb 24","value":55000}],' +
+    '"series":[{"key":"value","name":"Series label","color":"#13474A"}]}\n' +
+    fenceClose;
 
-    var gymCtx = '';
-    if (ctx.gym.membersNow) {
-      gymCtx = 'proof3 Gym 1 (Salt River) member data this month:
-';
-      gymCtx += '- Active members: ' + ctx.gym.membersNow + ' (prior month: ' + (ctx.gym.membersPrior||'n/a') + ', net change: ' + (ctx.gym.netChange||'n/a') + ')
-';
-      if (ctx.gym.trials) gymCtx += '- Trial members: ' + ctx.gym.trials + '
-';
-      if (ctx.gym.holds) gymCtx += '- On hold: ' + ctx.gym.holds + '
-';
-      if (ctx.gym.newMembers) gymCtx += '- New this month: ' + ctx.gym.newMembers + '
-';
-      if (ctx.gym.churned) gymCtx += '- Churned: ' + ctx.gym.churned + '
-';
-      if (ctx.gym.target) gymCtx += '- Member target: ' + ctx.gym.target + '
-';
-    }
+  var system =
+    'You generate monthly investor newsletters for The SageHouse.\n\n' +
+    'ENTITY STRUCTURE:\n' +
+    'The SageHouse LLC (TSH) owns SageHouse Capital LLC (SHC) and SageHouse Advisors LLC (SHA).\n' +
+    'SHC is a pure holding company - it has no operating revenue of its own.\n' +
+    'SHA generates advisory and consulting revenue - historically the primary TSH group revenue driver.\n' +
+    'SHC owns SageHouse Capital SPV1 LLC (SPV1), which is a fund vehicle for the proof3 investment.\n' +
+    'SPV1 owns proof3 Training Inc, which owns proof3 Coaching LLC and proof3 Gym 1 Phoenix LLC.\n' +
+    'TSH also holds minority positions in early-stage fitness, health, and wellness tech companies.\n' +
+    'proof3 Gym 1 (Salt River, Scottsdale AZ) opened January 2025. Gym breakeven is ~100-110 members.\n' +
+    'proof3 Coaching is the online coaching business and is profitable.\n\n' +
+    'INVESTOR AUDIENCE:\n' + (audienceMap[type] || audienceMap.all) + '\n\n' +
+    'WRITING VOICE - always write as Jim:\n' +
+    '- Direct, honest, personal. Use "I" for opinions and decisions, "we" for team actions.\n' +
+    '- Never use defensive framing (do not say "we are not hiding X" or similar).\n' +
+    '- Share bad news as clearly as good news. Never bury a problem.\n' +
+    '- Mix strategic narrative with specific numbers naturally inside sentences.\n' +
+    '- Treat investors as trusted partners who believe in the mission.\n' +
+    '- No corporate language, no over-qualifying words, no formal sign-offs.\n' +
+    '- Never reference any team member names unless explicitly provided in the context below.\n' +
+    '- Never infer, fabricate, or assume any facts not present in the data or context.\n\n' +
+    'FORMAT:\n' +
+    '- 600-700 words maximum (prose only, not counting chart JSON).\n' +
+    '- No bullet lists anywhere - all readable prose.\n' +
+    '- Exactly 4 chart JSON blocks embedded at natural narrative points.\n' +
+    '- 1-2 sentences before each chart explaining the so-what, not what the chart shows.\n' +
+    '- Personal forward-looking close, 2-3 sentences, sounds like Jim talking to a friend.\n\n' +
+    'CHART RULES - CRITICAL:\n' +
+    '- Only create charts using data explicitly present in the financial tables below.\n' +
+    '- Never fabricate, estimate, or interpolate chart data points.\n' +
+    '- Use this exact JSON format. The x-axis key MUST be "date":\n' +
+    chartExample + '\n' +
+    '- Allowed chart types: "bar", "line", "area" only.\n' +
+    '- Use ' + chartColorNote + '.\n' +
+    '- For series that are mostly negative (losses), use "#C0392B" as the color.\n' +
+    '- For trend charts showing last 12-24 months, use the filtered data table.\n' +
+    '- For all-time/inception charts (cash since founding, total revenue since launch), use the all-time data.\n\n' +
+    'DATA SOURCE: ' + sheetData.tabName + '\n' +
+    'Total months available: ' + sheetData.rowCount + ' (' + sheetData.earliestDate + ' to ' + sheetData.latestDate + ')\n' +
+    'Intercompany eliminations have already been applied where relevant.\n';
 
-    var opCtx = [
-      gymCtx,
-      ctx.gym.memberStory ? 'Member result story:
-' + ctx.gym.memberStory : '',
-      ctx.coaching.clients ? 'proof3 Online Coaching clients: ' + ctx.coaching.clients : '',
-      ctx.portfolio ? 'Portfolio updates:
-' + ctx.portfolio : '',
-      ctx.debt ? 'Current debt/note structure:
-' + ctx.debt : '',
-      ctx.unusual ? 'Unusual items:
-' + ctx.unusual : '',
-      ctx.focus ? 'Jim is focused on:
-' + ctx.focus : ''
-    ].filter(function(s) { return s.trim(); }).join('
+  var user =
+    'Generate the ' + cfg.label + ' investor newsletter.\n\n' +
+    'FILTERED FINANCIAL DATA (' + rangeLabel + '):\n' +
+    filteredTable + '\n\n' +
+    'ALL-TIME FINANCIAL DATA (use only for inception-to-date trend charts):\n' +
+    sheetData.allTime + '\n\n' +
+    (opCtx ? 'OPERATING CONTEXT THIS MONTH:\n' + opCtx + '\n\n' : '') +
+    'Write the complete newsletter now with exactly 4 chart JSON blocks embedded inline at natural points in the text. ' +
+    'Keep total prose under 700 words. Write entirely in Jim\'s voice throughout.';
 
-');
-
-    var chartColors = (type === 'tsh' || type === 'all')
-      ? '"#13474A" (teal) primary, "#F1CC6C" (gold) secondary'
-      : '"#3d9cb5" (blue) primary, "#a8d4e0" (light blue) secondary';
-
-    var chartFormatExample = tripleBacktick + 'chart
-{"type":"bar","title":"Title","data":[{"date":"Jan 24","value":50000}],"series":[{"key":"value","name":"Label","color":"#13474A"}]}
-' + tripleBacktick;
-
-    var system = 'You generate monthly investor newsletters for The SageHouse.
-
-' +
-      'ENTITY STRUCTURE:
-' +
-      'The SageHouse LLC (TSH) owns SageHouse Capital LLC (SHC) and SageHouse Advisors LLC (SHA).
-' +
-      'SHC is a holding company with no operating revenue of its own.
-' +
-      'SHA generates advisory/consulting revenue - historically the primary TSH group revenue driver.
-' +
-      'SHC owns SageHouse Capital SPV1 LLC (SPV1), a fund vehicle for the proof3 investment.
-' +
-      'SPV1 owns proof3 Training Inc, which owns proof3 Coaching LLC and proof3 Gym 1 Phoenix LLC.
-' +
-      'TSH also holds minority positions in early-stage fitness/health/wellness tech companies.
-' +
-      'proof3 Gym 1 (Salt River, Scottsdale AZ) opened January 2025. Breakeven is approximately 100-110 members.
-' +
-      'proof3 Coaching (online) is profitable and separate from the gym.
-
-' +
-      'INVESTOR AUDIENCE:
-' + audienceMap[type] + '
-
-' +
-      'WRITING VOICE:
-' +
-      '- Direct, honest, personal. Use "I" for opinions and decisions, "we" for team actions.
-' +
-      '- Never use defensive framing ("we are not hiding X", "contrary to what you might think").
-' +
-      '- Share bad news as clearly as good news - never bury a problem.
-' +
-      '- Mix strategic narrative with specific numbers naturally inside sentences.
-' +
-      '- Investors are trusted partners who believe in the mission.
-' +
-      '- No corporate language, no over-qualifying, no formal sign-offs.
-' +
-      '- Never reference team member names unless explicitly provided in the context below.
-' +
-      '- Never infer, fabricate, or assume facts not present in the data or context provided.
-
-' +
-      'FORMAT:
-' +
-      '- 600-700 words maximum (prose only, not counting chart JSON).
-' +
-      '- No bullet lists - all readable prose.
-' +
-      '- Exactly 4 chart JSON blocks embedded at natural narrative points.
-' +
-      '- 1-2 sentences before each chart explaining the so-what, not what the chart shows.
-' +
-      '- Personal forward-looking close, 2-3 sentences.
-
-' +
-      'CHART RULES - CRITICAL:
-' +
-      '- Only use data explicitly present in the financial tables provided. Never fabricate or estimate data points.
-' +
-      '- Use this exact JSON format with "date" as the x-axis key:
-' +
-      chartFormatExample + '
-' +
-      '- Allowed types: "bar", "line", "area" only.
-' +
-      '- Chart colors: ' + chartColors + '.
-' +
-      '- Negative-dominant series: "#C0392B".
-' +
-      '- All-time trend charts: use allTime data. Recent 12-month charts: use last12 data.
-
-' +
-      'DATA SOURCE: ' + sheetData.tabName + ' | ' + sheetData.rowCount + ' months | ' + sheetData.earliestDate + ' to ' + sheetData.latestDate + '
-' +
-      'Intercompany eliminations have already been applied where relevant.
-';
-
-    var primaryData = (sheetData.filtered && sheetData.filtered.length > 0)
-      ? buildTableFromRows(sheetData.filtered, sheetData)
-      : sheetData.last12;
-    var dataLabel = sheetData.filteredLabel || 'last 12 months';
-
-    var user = 'Generate the ' + config.label + ' investor newsletter.\n\n' +
-      'FINANCIAL DATA (' + dataLabel + '):\n' + primaryData + '\n\n' +
-      'ALL-TIME DATA (for inception-to-date charts only):\n' + sheetData.allTime + '\n\n' +
-      (opCtx ? 'OPERATING CONTEXT THIS MONTH:\n' + opCtx : 'No additional operating context provided.') +
-      '\n\nWrite the complete newsletter with exactly 4 chart JSON blocks. Keep prose under 700 words. Write entirely in Jim\'s voice.';
-
-    return { system: system, user: user };
-  }
+  return { system: system, user: user };
+}
 </script>
 </body>
 </html>
