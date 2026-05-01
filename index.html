@@ -6,6 +6,13 @@
   <title>SageHouse Newsletter Generator</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Crimson+Pro:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <!-- Open Graph meta tags - updated dynamically in view mode -->
+  <meta property="og:type"        content="article">
+  <meta property="og:site_name"   content="SageHouse Newsletter">
+  <meta property="og:title"       id="og-title"       content="SageHouse Investor Newsletter">
+  <meta property="og:description" id="og-description" content="Monthly investor update from The SageHouse.">
+  <meta property="og:image"       id="og-image"       content="https://jim-proof3.github.io/tsh-newsletter/sh-logo.png">
+  <meta name="twitter:card" content="summary_large_image">
   <style>
     :root {
       --primary:      #13474A;
@@ -202,9 +209,18 @@
         <div class="newsletter-body" id="newsletterBody"></div>
         <div class="export-bar">
           <button class="export-btn" id="editToggleBtn" onclick="toggleEdit()">Edit</button>
+          <button class="export-btn" onclick="showChartPicker()">Charts</button>
           <button class="export-btn" onclick="copyNewsletter()">Copy</button>
           <button class="export-btn" onclick="exportToDoc()">Google Doc</button>
-          <button class="export-btn primary" onclick="shareNewsletter()">Share Link</button>
+          <button class="export-btn primary" onclick="shareNewsletter()">Share</button>
+        </div>
+        <!-- Chart picker panel -->
+        <div id="chartPickerPanel" style="display:none;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:720px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Select Charts to Display</div>
+            <button onclick="applyChartSelection()" style="padding:6px 14px;background:var(--primary);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Apply</button>
+          </div>
+          <div id="chartPickerList" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
       </div>
     </div>
@@ -214,61 +230,59 @@
   </main>
 </div>
 
-<script>
+
+</body>
+</html><script>
 /* =============================================================
-   SAGEHOUSE NEWSLETTER GENERATOR v4
+   SAGEHOUSE NEWSLETTER GENERATOR v5
+   Features: per-type storage, inline edit, KV share links,
+             chart picker, OG tags, configurable fields
    ============================================================= */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
 var DATA_SHEET_ID = '1NDhm82bK-tyOtkyyZjGRB0SQpbwMeRmZ6yOazQ-BILo';
 
-/* ── Sheet configs ─────────────────────────────────────────── */
 var SHEET_CONFIGS = {
-  all:    { sheetId: DATA_SHEET_ID, gid: '0',          label: 'All Entities',          tabName: 'r/u - All Entities',     brand: 'sagehouse' },
-  tsh:    { sheetId: DATA_SHEET_ID, gid: '326443417',  label: 'TSH, SHA & SHC',        tabName: 'r/u - TSH w/o All p3',   brand: 'sagehouse' },
-  p3spv:  { sheetId: DATA_SHEET_ID, gid: '1633984252', label: 'proof3 + SPV1',         tabName: 'r/u - p3 w/ SHC SPV1',  brand: 'proof3'    },
-  p3only: { sheetId: DATA_SHEET_ID, gid: '553041294',  label: 'proof3 (ex-SPV1)',      tabName: 'r/u - p3 w/o SHC SPV1', brand: 'proof3'    },
-  spv1:   { sheetId: DATA_SHEET_ID, gid: '1468056005', label: 'SHC SPV1 Only',         tabName: 'SHC SPV1-Only',          brand: 'proof3'    }
+  all:    { sheetId: DATA_SHEET_ID, gid: '0',          label: 'All Entities',    tabName: 'r/u - All Entities',     brand: 'sagehouse' },
+  tsh:    { sheetId: DATA_SHEET_ID, gid: '326443417',  label: 'TSH, SHA & SHC',  tabName: 'r/u - TSH w/o All p3',   brand: 'sagehouse' },
+  p3spv:  { sheetId: DATA_SHEET_ID, gid: '1633984252', label: 'proof3 + SPV1',   tabName: 'r/u - p3 w/ SHC SPV1',  brand: 'proof3'    },
+  p3only: { sheetId: DATA_SHEET_ID, gid: '553041294',  label: 'proof3 (ex-SPV1)',tabName: 'r/u - p3 w/o SHC SPV1', brand: 'proof3'    },
+  spv1:   { sheetId: DATA_SHEET_ID, gid: '1468056005', label: 'SHC SPV1 Only',   tabName: 'SHC SPV1-Only',          brand: 'proof3'    }
 };
 
-/* ── Context field config (edit this to change inputs per type) ─
-   Each type maps to an array of field definitions.
-   field types: 'number', 'text', 'textarea'
-   shared: true = field appears for all types
-   ─────────────────────────────────────────────────────────── */
+/* OG image URLs hosted in the GitHub repo */
+var OG_IMAGES = {
+  sagehouse: 'https://jim-proof3.github.io/tsh-newsletter/sh-logo.png',
+  proof3:    'https://jim-proof3.github.io/tsh-newsletter/p3-logo.png'
+};
+
+/* ── Context field definitions ──────────────────────────────── */
 var CONTEXT_FIELDS = {
-  /* Fields shown for ALL newsletter types */
   shared: [
-    { id: 'unusualItems', label: 'Unusual Items in Numbers', type: 'textarea', rows: 2,
-      placeholder: 'e.g. Cash dropped $18k due to equipment deposit - not recurring opex.' },
-    { id: 'focusItems', label: 'What Jim Is Focused On', type: 'textarea', rows: 2,
-      placeholder: 'e.g. Closing gym 2 lease, hitting 95 members, finalizing Elo Health terms.' }
+    { id:'unusualItems', label:'Unusual Items in Numbers', type:'textarea', rows:2,
+      placeholder:'e.g. Cash dropped $18k due to equipment deposit - not recurring opex.' },
+    { id:'focusItems', label:'What Jim Is Focused On', type:'textarea', rows:2,
+      placeholder:'e.g. Closing gym 2 lease, hitting 95 members, finalizing Elo Health terms.' }
   ],
-
-  /* Fields shown only for SageHouse-branded types (all, tsh) */
   sagehouse: [
-    { id: 'portfolioUpdates', label: 'Portfolio Company Updates', type: 'textarea', rows: 2,
-      placeholder: 'e.g. SIQ Basketball - strong holiday season. Elo Health on track for Series A.' }
+    { id:'portfolioUpdates', label:'Portfolio Company Updates', type:'textarea', rows:2,
+      placeholder:'e.g. SIQ Basketball - strong holiday season. Elo Health on track for Series A.' }
   ],
-
-  /* Fields shown only for proof3-branded types (p3spv, p3only, spv1) */
   proof3gym: [
-    { id: 'membersNow',     label: 'Members This Month',  type: 'number', placeholder: '86' },
-    { id: 'membersPrior',   label: 'Members Last Month',  type: 'number', placeholder: '80' },
-    { id: 'trialsNow',      label: 'Trial Members',       type: 'number', placeholder: '4'  },
-    { id: 'holdsNow',       label: 'On Hold',             type: 'number', placeholder: '2'  },
-    { id: 'newMembers',     label: 'New This Month',      type: 'number', placeholder: '8'  },
-    { id: 'churnedMembers', label: 'Churned',             type: 'number', placeholder: '2'  },
-    { id: 'coachingClients',label: 'Coaching Clients',    type: 'number', placeholder: '335'},
-    { id: 'memberTarget',   label: 'Member Target',       type: 'number', placeholder: '100'},
-    { id: 'memberStory',    label: 'Member Story (name, age, results, their words)', type: 'textarea', rows: 3,
-      placeholder: 'e.g. Kirk, 47 - weight down 3.2lbs, body fat down 1.3%, muscle up 0.4lbs. Said: I LOVE it here.' }
+    { id:'membersNow',      label:'Members This Month', type:'number', placeholder:'86'  },
+    { id:'membersPrior',    label:'Members Last Month', type:'number', placeholder:'80'  },
+    { id:'trialsNow',       label:'Trial Members',      type:'number', placeholder:'4'   },
+    { id:'holdsNow',        label:'On Hold',            type:'number', placeholder:'2'   },
+    { id:'newMembers',      label:'New This Month',     type:'number', placeholder:'8'   },
+    { id:'churnedMembers',  label:'Churned',            type:'number', placeholder:'2'   },
+    { id:'coachingClients', label:'Coaching Clients',   type:'number', placeholder:'335' },
+    { id:'memberTarget',    label:'Member Target',      type:'number', placeholder:'100' },
+    { id:'memberStory', label:'Member Story (name, age, results, their words)', type:'textarea', rows:3,
+      placeholder:'e.g. Kirk, 47 - weight down 3.2lbs, body fat down 1.3%, muscle up 0.4lbs.' }
   ],
-
-  /* Debt context shown for SPV1 types */
   spv1: [
-    { id: 'debtContext', label: 'Debt / Note Structure', type: 'textarea', rows: 2,
-      placeholder: 'e.g. SPV1 convertible notes total $378k from 4 investors at 8% simple interest.' }
+    { id:'debtContext', label:'Debt / Note Structure', type:'textarea', rows:2,
+      placeholder:'e.g. SPV1 convertible notes total $378k from 4 investors at 8% simple interest.' }
   ]
 };
 
@@ -276,63 +290,60 @@ var CONTEXT_FIELDS = {
 var currentType = 'all';
 var isEditMode  = false;
 var BT = String.fromCharCode(96);
-var CHART_OPEN = BT + BT + BT + 'chart';
+var CHART_OPEN  = BT + BT + BT + 'chart';
 var FENCE_CLOSE = BT + BT + BT;
 
-/* Per-type newsletter storage */
-var newsletters = { all: null, tsh: null, p3spv: null, p3only: null, spv1: null };
-var chartsByType = { all: [],  tsh: [],  p3spv: [],  p3only: [],  spv1: []  };
+/* Per-type storage */
+var newsletters   = { all:null, tsh:null, p3spv:null, p3only:null, spv1:null };
+var allCharts     = { all:[],   tsh:[],   p3spv:[],   p3only:[],   spv1:[]   };
+var selectedCharts= { all:[],   tsh:[],   p3spv:[],   p3only:[],   spv1:[]   };
 
 /* =============================================================
    CONTEXT FIELD RENDERER
    ============================================================= */
 function renderContextFields(type) {
-  var brand  = SHEET_CONFIGS[type] ? SHEET_CONFIGS[type].brand : 'sagehouse';
-  var fields = [].concat(CONTEXT_FIELDS.shared);
-  if (brand === 'sagehouse')         fields = CONTEXT_FIELDS.sagehouse.concat(fields);
-  if (brand === 'proof3')            fields = CONTEXT_FIELDS.proof3gym.concat(fields);
+  var brand = (SHEET_CONFIGS[type]||{}).brand || 'sagehouse';
+  var fields = [];
+  if (brand === 'proof3') fields = fields.concat(CONTEXT_FIELDS.proof3gym);
+  if (brand === 'sagehouse') fields = fields.concat(CONTEXT_FIELDS.sagehouse);
+  fields = fields.concat(CONTEXT_FIELDS.shared);
   if (type === 'spv1' || type === 'p3spv') fields = fields.concat(CONTEXT_FIELDS.spv1);
 
-  /* Save current values before rebuilding */
+  /* Save current values */
   var saved = {};
   var existing = document.querySelectorAll('#contextFieldsContainer input, #contextFieldsContainer textarea');
-  for (var i = 0; i < existing.length; i++) {
-    saved[existing[i].id] = existing[i].value;
-  }
+  for (var i = 0; i < existing.length; i++) saved[existing[i].id] = existing[i].value;
 
   var container = document.getElementById('contextFieldsContainer');
   if (!container) return;
 
   var html = '';
-  var numberPairs = [];
+  var buf  = []; /* buffer number fields for pairing */
+
+  function flushBuf() {
+    if (!buf.length) return;
+    html += '<div class="input-row">';
+    for (var b = 0; b < buf.length; b++) {
+      html += '<div class="context-field"><label>' + buf[b].label + '</label>' +
+              '<input type="number" id="' + buf[b].id + '" placeholder="' + (buf[b].placeholder||'') + '"></div>';
+    }
+    html += '</div>';
+    buf = [];
+  }
+
   for (var f = 0; f < fields.length; f++) {
     var fd = fields[f];
     if (fd.type === 'number') {
-      numberPairs.push(fd);
-      if (numberPairs.length === 2 || f === fields.length - 1 ||
-          fields[f+1] == null || fields[f+1].type !== 'number') {
-        html += '<div class="input-row">';
-        for (var p = 0; p < numberPairs.length; p++) {
-          html += '<div class="context-field"><label>' + numberPairs[p].label + '</label>' +
-                  '<input type="number" id="' + numberPairs[p].id + '" placeholder="' + (numberPairs[p].placeholder||'') + '"></div>';
-        }
-        html += '</div>';
-        numberPairs = [];
-      }
+      buf.push(fd);
+      if (buf.length === 2) flushBuf();
     } else {
-      if (numberPairs.length > 0) {
-        html += '<div class="input-row">';
-        for (var p = 0; p < numberPairs.length; p++) {
-          html += '<div class="context-field"><label>' + numberPairs[p].label + '</label>' +
-                  '<input type="number" id="' + numberPairs[p].id + '" placeholder="' + (numberPairs[p].placeholder||'') + '"></div>';
-        }
-        html += '</div>';
-        numberPairs = [];
-      }
+      flushBuf();
       html += '<div class="context-field"><label>' + fd.label + '</label>' +
               '<textarea id="' + fd.id + '" rows="' + (fd.rows||2) + '" placeholder="' + (fd.placeholder||'') + '"></textarea></div>';
     }
   }
+  flushBuf();
+
   container.innerHTML = html;
 
   /* Restore saved values */
@@ -348,57 +359,40 @@ function renderContextFields(type) {
 function setType(type, cardEl) {
   if (!SHEET_CONFIGS[type]) return;
   currentType = type;
+  var cfg = SHEET_CONFIGS[type];
 
-  /* Highlight all cards across both rows */
-  var allCards = document.querySelectorAll('.type-card');
-  for (var i = 0; i < allCards.length; i++) allCards[i].classList.remove('active');
+  /* Cards */
+  var cards = document.querySelectorAll('.type-card');
+  for (var i = 0; i < cards.length; i++) cards[i].classList.remove('active');
   if (cardEl) cardEl.classList.add('active');
 
-  var cfg = SHEET_CONFIGS[type];
-  var titleEl = document.getElementById('outputTitle');
-  var metaEl  = document.getElementById('headerMeta');
-  if (titleEl) titleEl.textContent = cfg.label + ' Newsletter';
-  if (metaEl)  metaEl.textContent  = cfg.label;
+  /* Header / title */
+  var t = document.getElementById('outputTitle'); if(t) t.textContent = cfg.label + ' Newsletter';
+  var m = document.getElementById('headerMeta');  if(m) m.textContent = cfg.label;
 
+  /* Brand */
   document.documentElement.setAttribute('data-brand', cfg.brand);
 
-  /* Rebuild context fields for this type */
+  /* Rebuild context fields */
   renderContextFields(type);
 
-  /* Show this type's newsletter if it exists, otherwise empty state */
+  /* Close chart picker */
+  var cp = document.getElementById('chartPickerPanel'); if(cp) cp.style.display = 'none';
+
+  /* Show stored newsletter or empty state */
   showNewsletterForType(type);
 }
 
-/* Attach click listeners to BOTH type rows */
+/* Attach listeners to every type card immediately */
 (function() {
-  /* Top row - these have onclick but we also add to typeGrid delegation below */
-  var topCards = document.querySelectorAll('[data-type]');
-  for (var i = 0; i < topCards.length; i++) {
+  var cards = document.querySelectorAll('[data-type]');
+  for (var i = 0; i < cards.length; i++) {
     (function(card) {
-      card.addEventListener('click', function(e) {
-        var type = card.getAttribute('data-type');
-        if (type) setType(type, card);
+      card.addEventListener('click', function() {
+        setType(card.getAttribute('data-type'), card);
       });
-    })(topCards[i]);
+    })(cards[i]);
   }
-
-  /* Also delegate from typeGrid for the bottom 3 */
-  var grid = document.getElementById('typeGrid');
-  if (grid) {
-    grid.addEventListener('click', function(e) {
-      var el = e.target;
-      while (el && el !== grid) {
-        if (el.getAttribute('data-type')) break;
-        el = el.parentElement;
-      }
-      if (el && el !== grid) {
-        var type = el.getAttribute('data-type');
-        if (type) setType(type, el);
-      }
-    });
-  }
-
-  /* Initialize fields for default type */
   renderContextFields(currentType);
 })();
 
@@ -406,14 +400,17 @@ function setType(type, cardEl) {
    NEWSLETTER STORAGE PER TYPE
    ============================================================= */
 function showNewsletterForType(type) {
-  var newsletter = newsletters[type];
-  var charts     = chartsByType[type] || [];
-  isEditMode     = false;
+  isEditMode = false;
+  var eb = document.getElementById('editToggleBtn'); if(eb) eb.textContent = 'Edit';
 
-  var editBtn = document.getElementById('editToggleBtn');
-  if (editBtn) editBtn.textContent = 'Edit';
+  var body = document.getElementById('newsletterBody');
+  if (body) {
+    body.contentEditable = 'false';
+    body.style.outline   = 'none';
+    body.style.cursor    = 'default';
+  }
 
-  if (!newsletter) {
+  if (!newsletters[type]) {
     document.getElementById('emptyState').style.display = 'block';
     document.getElementById('newsletterContent').style.display = 'none';
     document.getElementById('outputMeta').textContent = '';
@@ -422,7 +419,8 @@ function showNewsletterForType(type) {
 
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('newsletterContent').style.display = 'block';
-  renderNewsletter(newsletter, charts);
+  var charts = selectedCharts[type].length ? selectedCharts[type] : allCharts[type];
+  renderNewsletter(newsletters[type], charts);
 }
 
 /* =============================================================
@@ -434,15 +432,14 @@ function switchTab(tab, el) {
   if (el) el.classList.add('active');
   document.getElementById('newsletterTab').style.display = tab === 'newsletter' ? 'block' : 'none';
   document.getElementById('chartsTab').style.display     = tab === 'charts'     ? 'block' : 'none';
-  if (tab === 'charts' && chartsByType[currentType].length > 0) renderChartsTab();
+  if (tab === 'charts') renderChartsTab();
 }
 
 /* =============================================================
    STATUS
    ============================================================= */
 function showStatus(type, msg) {
-  var el = document.getElementById('status');
-  if (!el) return;
+  var el = document.getElementById('status'); if(!el) return;
   el.className = 'status-bar show ' + type;
   el.textContent = msg;
 }
@@ -451,22 +448,18 @@ function showStatus(type, msg) {
    CONTEXT VALUES
    ============================================================= */
 function getVal(id) {
-  var el = document.getElementById(id);
-  return el ? el.value.trim() : '';
+  var el = document.getElementById(id); return el ? el.value.trim() : '';
 }
 
 function buildContext() {
-  var mNow   = getVal('membersNow');
-  var mPrior = getVal('membersPrior');
-  var net    = (mNow && mPrior) ? parseInt(mNow,10) - parseInt(mPrior,10) : null;
+  var mN = getVal('membersNow'), mP = getVal('membersPrior');
+  var net = (mN && mP) ? parseInt(mN,10) - parseInt(mP,10) : null;
   return {
-    gym: {
-      membersNow:   mNow, membersPrior: mPrior,
-      netChange:    net !== null ? (net >= 0 ? '+'+net : ''+net) : '',
-      trials:       getVal('trialsNow'),      holds:   getVal('holdsNow'),
-      newMembers:   getVal('newMembers'),      churned: getVal('churnedMembers'),
-      target:       getVal('memberTarget'),   memberStory: getVal('memberStory')
-    },
+    gym: { membersNow:mN, membersPrior:mP,
+           netChange: net!==null?(net>=0?'+'+net:''+net):'',
+           trials:getVal('trialsNow'), holds:getVal('holdsNow'),
+           newMembers:getVal('newMembers'), churned:getVal('churnedMembers'),
+           target:getVal('memberTarget'), memberStory:getVal('memberStory') },
     coaching:  { clients: getVal('coachingClients') },
     portfolio: getVal('portfolioUpdates'),
     debt:      getVal('debtContext'),
@@ -480,10 +473,10 @@ function buildContext() {
    ============================================================= */
 function applyDatePreset() {
   var preset = document.getElementById('dateRangePreset').value;
-  var row    = document.getElementById('customDateRow');
-  var lbl    = document.getElementById('dateRangeLabel');
+  var row = document.getElementById('customDateRow');
+  var lbl = document.getElementById('dateRangeLabel');
   if (row) row.style.display = preset === 'custom' ? 'block' : 'none';
-  var msgs = { all:'All available data', '12':'Last 12 months', '24':'Last 24 months',
+  var msgs = { all:'All available data','12':'Last 12 months','24':'Last 24 months',
                '36':'Last 36 months', ytd:'Year to date', custom:'Enter dates above' };
   if (lbl) lbl.textContent = msgs[preset] || '';
 }
@@ -495,166 +488,196 @@ function parseRowDate(str) {
   if (mdy) return new Date(parseInt(mdy[3],10), parseInt(mdy[1],10)-1, 1);
   var ymd = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (ymd) return new Date(parseInt(ymd[1],10), parseInt(ymd[2],10)-1, 1);
-  var MO = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-  var parts = str.toLowerCase().split(/[\s,\/\-]+/);
-  var mi = -1, yr = null;
-  for (var i = 0; i < parts.length; i++) {
-    if (yr === null && /^\d{4}$/.test(parts[i])) yr = parseInt(parts[i],10);
-    if (mi === -1) for (var m = 0; m < MO.length; m++) {
-      if (parts[i].indexOf(MO[m]) === 0) { mi = m; break; }
-    }
+  var MO=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  var parts=str.toLowerCase().split(/[\s,\/\-]+/);
+  var mi=-1, yr=null;
+  for (var i=0;i<parts.length;i++) {
+    if (!yr && /^\d{4}$/.test(parts[i])) yr=parseInt(parts[i],10);
+    if (mi===-1) for (var m=0;m<MO.length;m++) { if(parts[i].indexOf(MO[m])===0){mi=m;break;} }
   }
-  return (mi >= 0 && yr) ? new Date(yr, mi, 1) : null;
+  return (mi>=0&&yr) ? new Date(yr,mi,1) : null;
 }
 
 function getFilteredRows(allRows) {
-  var sel    = document.getElementById('dateRangePreset');
-  var preset = sel ? sel.value : '12';
-  if (preset === 'all') return allRows;
-  if (preset === 'ytd') {
-    var yr = new Date().getFullYear();
-    var out = [];
-    for (var i=0;i<allRows.length;i++) { var d=parseRowDate(allRows[i][0]); if(d&&d.getFullYear()===yr) out.push(allRows[i]); }
-    return out.length ? out : allRows.slice(-12);
+  var sel=document.getElementById('dateRangePreset'), preset=sel?sel.value:'12';
+  if (preset==='all') return allRows;
+  if (preset==='ytd') {
+    var yr=new Date().getFullYear(), out=[];
+    for(var i=0;i<allRows.length;i++){var d=parseRowDate(allRows[i][0]);if(d&&d.getFullYear()===yr)out.push(allRows[i]);}
+    return out.length?out:allRows.slice(-12);
   }
-  if (preset === 'custom') {
-    var sv = getVal('dateStart'), ev = getVal('dateEnd');
-    if (!sv||!ev) return allRows.slice(-12);
-    var sd = new Date(sv+'-01'), ed = new Date(ev+'-01');
-    var out = [];
-    for (var i=0;i<allRows.length;i++) { var d=parseRowDate(allRows[i][0]); if(d&&d>=sd&&d<=ed) out.push(allRows[i]); }
-    return out.length ? out : allRows;
+  if (preset==='custom') {
+    var sv=getVal('dateStart'),ev=getVal('dateEnd');
+    if(!sv||!ev) return allRows.slice(-12);
+    var sd=new Date(sv+'-01'),ed=new Date(ev+'-01'),out=[];
+    for(var i=0;i<allRows.length;i++){var d=parseRowDate(allRows[i][0]);if(d&&d>=sd&&d<=ed)out.push(allRows[i]);}
+    return out.length?out:allRows;
   }
-  var n = parseInt(preset,10);
-  return isNaN(n) ? allRows.slice(-12) : allRows.slice(-n);
+  var n=parseInt(preset,10); return isNaN(n)?allRows.slice(-12):allRows.slice(-n);
 }
 
 function getRangeLabel(preset, earliest, latest) {
-  if (preset === 'all')    return 'all data (' + earliest + ' to ' + latest + ')';
-  if (preset === 'ytd')    return 'year to date ' + new Date().getFullYear();
-  if (preset === 'custom') return (getVal('dateStart') || '?') + ' to ' + (getVal('dateEnd') || '?');
-  return 'last ' + preset + ' months';
+  if(preset==='all')    return 'all data ('+earliest+' to '+latest+')';
+  if(preset==='ytd')    return 'year to date '+new Date().getFullYear();
+  if(preset==='custom') return (getVal('dateStart')||'?')+' to '+(getVal('dateEnd')||'?');
+  return 'last '+preset+' months';
 }
 
 /* =============================================================
    CSV FETCH + PARSE
    ============================================================= */
 function parseCsvLine(line) {
-  var result=[], cur='', inQ=false;
-  for (var i=0;i<line.length;i++) {
+  var result=[],cur='',inQ=false;
+  for(var i=0;i<line.length;i++){
     var c=line[i];
-    if (c==='"') { inQ=!inQ; }
-    else if (c===','&&!inQ) { result.push(cur.trim()); cur=''; }
-    else { cur+=c; }
+    if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){result.push(cur.trim());cur='';}else{cur+=c;}
   }
-  result.push(cur.trim());
-  return result;
+  result.push(cur.trim()); return result;
 }
 
 function fmtVal(v) {
-  if (v===null||v===undefined||v==='') return '0';
-  var s=String(v).trim(), cl=s.replace(/[$,%]/g,''), n=parseFloat(cl);
-  if (isNaN(n)) return s;
-  if (s.indexOf('%')>=0)       return n.toFixed(1)+'%';
-  if (Math.abs(n)>=1000000)    return '$'+(n/1000000).toFixed(2)+'M';
-  if (Math.abs(n)>=1000)       return '$'+(n/1000).toFixed(1)+'k';
+  if(v===null||v===undefined||v==='') return '0';
+  var s=String(v).trim(),cl=s.replace(/[$,%]/g,''),n=parseFloat(cl);
+  if(isNaN(n)) return s;
+  if(s.indexOf('%')>=0) return n.toFixed(1)+'%';
+  if(Math.abs(n)>=1000000) return '$'+(n/1000000).toFixed(2)+'M';
+  if(Math.abs(n)>=1000)    return '$'+(n/1000).toFixed(1)+'k';
   return s;
 }
 
 function rowsToTable(rows, hdr) {
-  if (!rows||!rows.length) return 'No data.\n';
-  var t = 'Date\t'+hdr.slice(1,30).join('\t')+'\n'+'------------------------------------------------------------\n';
-  for (var i=0;i<rows.length;i++) {
+  if(!rows||!rows.length) return 'No data.\n';
+  var t='Date\t'+hdr.slice(1,30).join('\t')+'\n'+'------------------------------------------------------------\n';
+  for(var i=0;i<rows.length;i++){
     var vals=[];
-    for (var j=0;j<Math.min(rows[i].length,30);j++) vals.push(fmtVal(rows[i][j]));
+    for(var j=0;j<Math.min(rows[i].length,30);j++) vals.push(fmtVal(rows[i][j]));
     t+=vals.join('\t')+'\n';
   }
   return t;
 }
 
 async function fetchSheetData(type) {
-  var cfg = SHEET_CONFIGS[type];
-  if (!cfg) throw new Error('Unknown type: '+type);
-  var url = 'https://docs.google.com/spreadsheets/d/'+cfg.sheetId+'/export?format=csv&gid='+cfg.gid;
-  var resp = await fetch(url);
-  if (!resp.ok) throw new Error('Sheet "'+cfg.tabName+'" returned HTTP '+resp.status+'. Check sharing settings.');
-  var csv  = await resp.text();
-  var lines = csv.split('\n').filter(function(l){return l.trim();});
-  if (lines.length<3) throw new Error('Sheet "'+cfg.tabName+'" appears empty.');
-  var rows = lines.map(parseCsvLine);
-  var hIdx = 0;
-  outer: for (var i=0;i<Math.min(rows.length,10);i++) {
-    for (var j=0;j<rows[i].length;j++) {
-      if (/jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{1,2}\/\d{4}/i.test(rows[i][j])) { hIdx=i; break outer; }
+  var cfg=SHEET_CONFIGS[type];
+  if(!cfg) throw new Error('Unknown type: '+type);
+  var url='https://docs.google.com/spreadsheets/d/'+cfg.sheetId+'/export?format=csv&gid='+cfg.gid;
+  var resp=await fetch(url);
+  if(!resp.ok) throw new Error('Sheet "'+cfg.tabName+'" returned HTTP '+resp.status+'. Check sharing settings.');
+  var csv=await resp.text();
+  var lines=csv.split('\n').filter(function(l){return l.trim();});
+  if(lines.length<3) throw new Error('Sheet "'+cfg.tabName+'" appears empty.');
+  var rows=lines.map(parseCsvLine);
+  var hIdx=0;
+  outer: for(var i=0;i<Math.min(rows.length,10);i++){
+    for(var j=0;j<rows[i].length;j++){
+      if(/jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{1,2}\/\d{4}/i.test(rows[i][j])){hIdx=i;break outer;}
     }
   }
-  var hdr = rows[hIdx];
-  var allRows = [];
-  for (var i=hIdx+1;i<rows.length;i++) { if (rows[i][0]&&/\d/.test(rows[i][0])) allRows.push(rows[i]); }
-  if (!allRows.length) throw new Error('No data rows in "'+cfg.tabName+'".');
-  return { tabName:cfg.tabName, hdr:hdr, allRows:allRows,
-           allTime:rowsToTable(allRows,hdr), last12:rowsToTable(allRows.slice(-12),hdr),
-           rowCount:allRows.length,
-           earliestDate:allRows[0][0], latestDate:allRows[allRows.length-1][0] };
+  var hdr=rows[hIdx],allRows=[];
+  for(var i=hIdx+1;i<rows.length;i++){if(rows[i][0]&&/\d/.test(rows[i][0]))allRows.push(rows[i]);}
+  if(!allRows.length) throw new Error('No data rows in "'+cfg.tabName+'".');
+  return {tabName:cfg.tabName,hdr:hdr,allRows:allRows,
+          allTime:rowsToTable(allRows,hdr),last12:rowsToTable(allRows.slice(-12),hdr),
+          rowCount:allRows.length,earliestDate:allRows[0][0],latestDate:allRows[allRows.length-1][0]};
 }
 
 /* =============================================================
    GENERATE
    ============================================================= */
 async function generate() {
-  var btn = document.getElementById('generateBtn');
-  if (!btn) return;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Fetching data...';
-  showStatus('loading', 'Reading from Google Sheets...');
+  var btn=document.getElementById('generateBtn'); if(!btn) return;
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>Fetching data...';
+  showStatus('loading','Reading from Google Sheets...');
   try {
-    var sd     = await fetchSheetData(currentType);
-    var sel    = document.getElementById('dateRangePreset');
-    var preset = sel ? sel.value : '12';
-    var fRows  = getFilteredRows(sd.allRows);
-    var fTable = rowsToTable(fRows, sd.hdr);
-    var fLabel = getRangeLabel(preset, sd.earliestDate, sd.latestDate);
+    var sd=await fetchSheetData(currentType);
+    var sel=document.getElementById('dateRangePreset'), preset=sel?sel.value:'12';
+    var fRows=getFilteredRows(sd.allRows);
+    var fTable=rowsToTable(fRows,sd.hdr);
+    var fLabel=getRangeLabel(preset,sd.earliestDate,sd.latestDate);
 
-    showStatus('loading', 'Loaded '+sd.rowCount+' months ('+fLabel+'). Calling Claude...');
-    btn.innerHTML = '<span class="spinner"></span>Writing newsletter...';
+    showStatus('loading','Loaded '+sd.rowCount+' months ('+fLabel+'). Calling Claude...');
+    btn.innerHTML='<span class="spinner"></span>Writing newsletter...';
 
-    var ctx     = buildContext();
-    var prompts = buildPrompts(currentType, sd, fTable, fLabel, ctx);
+    var ctx=buildContext();
+    var prompts=buildPrompts(currentType,sd,fTable,fLabel,ctx);
 
-    var resp = await fetch(WORKER_URL, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ system:prompts.system, messages:[{role:'user',content:prompts.user}] })
+    var resp=await fetch(WORKER_URL,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({system:prompts.system,messages:[{role:'user',content:prompts.user}]})
     });
-    if (!resp.ok) throw new Error('Worker HTTP '+resp.status);
-    var result = await resp.json();
-    if (result.error) throw new Error(result.error.message||JSON.stringify(result.error));
-    if (!result.content||!result.content[0]) throw new Error('Empty Claude response');
+    if(!resp.ok) throw new Error('Worker HTTP '+resp.status);
+    var result=await resp.json();
+    if(result.error) throw new Error(result.error.message||JSON.stringify(result.error));
+    if(!result.content||!result.content[0]) throw new Error('Empty Claude response');
 
-    var text = result.content[0].text;
+    var text=result.content[0].text;
+    newsletters[currentType]   = text;
+    allCharts[currentType]     = extractCharts(text);
+    selectedCharts[currentType]= allCharts[currentType].slice(); /* default: all selected */
 
-    /* Store per type */
-    newsletters[currentType]  = text;
-    chartsByType[currentType] = extractCharts(text);
+    isEditMode=false;
+    var eb=document.getElementById('editToggleBtn'); if(eb) eb.textContent='Edit';
+    document.getElementById('emptyState').style.display='none';
+    document.getElementById('newsletterContent').style.display='block';
+    renderNewsletter(text, selectedCharts[currentType]);
 
-    /* Render */
-    document.getElementById('emptyState').style.display = 'none';
-    document.getElementById('newsletterContent').style.display = 'block';
-    isEditMode = false;
-    var eb = document.getElementById('editToggleBtn'); if(eb) eb.textContent='Edit';
-    renderNewsletter(text, chartsByType[currentType]);
-
-    var usage = result.usage||{};
+    var usage=result.usage||{};
     showStatus('success','Done. '+(usage.input_tokens?usage.input_tokens.toLocaleString()+' in / ':'')+
       (usage.output_tokens?usage.output_tokens.toLocaleString()+' out tokens.':'Complete.'));
-    document.getElementById('outputMeta').textContent =
+    document.getElementById('outputMeta').textContent=
       new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
 
   } catch(err) {
-    console.error('Generate error:', err);
-    showStatus('error', 'Error: '+err.message);
+    console.error('Generate error:',err);
+    showStatus('error','Error: '+err.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Generate Newsletter';
+    btn.disabled=false; btn.textContent='Generate Newsletter';
+  }
+}
+
+/* =============================================================
+   CHART PICKER
+   ============================================================= */
+function showChartPicker() {
+  var panel=document.getElementById('chartPickerPanel');
+  var list =document.getElementById('chartPickerList');
+  var charts=allCharts[currentType]||[];
+  if(!panel||!list) return;
+
+  if(panel.style.display!=='none'){panel.style.display='none';return;}
+
+  if(!charts.length){showStatus('error','Generate a newsletter first.');return;}
+
+  var sel=selectedCharts[currentType]||charts;
+  var html='';
+  for(var i=0;i<charts.length;i++){
+    var checked=sel.indexOf(charts[i])>=0?'checked':'';
+    html+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border);">'+
+          '<input type="checkbox" data-chart-idx="'+i+'" '+checked+' style="width:16px;height:16px;cursor:pointer;">'+
+          '<span><strong>'+(charts[i].title||'Chart '+(i+1))+'</strong><br>'+
+          '<span style="font-size:11px;color:var(--muted)">'+charts[i].type+' chart</span></span></label>';
+  }
+  list.innerHTML=html;
+  panel.style.display='block';
+}
+
+function applyChartSelection() {
+  var checkboxes=document.querySelectorAll('#chartPickerList input[type="checkbox"]');
+  var charts=allCharts[currentType]||[];
+  var chosen=[];
+  for(var i=0;i<checkboxes.length;i++){
+    if(checkboxes[i].checked){
+      var idx=parseInt(checkboxes[i].getAttribute('data-chart-idx'),10);
+      if(charts[idx]) chosen.push(charts[idx]);
+    }
+  }
+  selectedCharts[currentType]=chosen.length?chosen:charts;
+  document.getElementById('chartPickerPanel').style.display='none';
+
+  /* Re-render newsletter with selected charts */
+  if(newsletters[currentType]){
+    renderNewsletter(newsletters[currentType], selectedCharts[currentType]);
+    showStatus('success','Chart selection updated. '+selectedCharts[currentType].length+' charts displayed.');
   }
 }
 
@@ -662,14 +685,13 @@ async function generate() {
    RENDER NEWSLETTER
    ============================================================= */
 function extractCharts(text) {
-  var charts=[], pos=0;
-  while (true) {
-    var s = text.indexOf(CHART_OPEN, pos); if(s===-1) break;
-    var js = text.indexOf('\n',s); if(js===-1) break; js++;
-    var e = text.indexOf(FENCE_CLOSE, js); if(e===-1) break;
-    try { charts.push(JSON.parse(text.substring(js,e).trim())); }
-    catch(ex) { console.warn('Chart parse err at',s); }
-    pos = e + FENCE_CLOSE.length;
+  var charts=[],pos=0;
+  while(true){
+    var s=text.indexOf(CHART_OPEN,pos); if(s===-1) break;
+    var js=text.indexOf('\n',s); if(js===-1) break; js++;
+    var e=text.indexOf(FENCE_CLOSE,js); if(e===-1) break;
+    try{charts.push(JSON.parse(text.substring(js,e).trim()));}catch(ex){console.warn('Chart parse error at',s);}
+    pos=e+FENCE_CLOSE.length;
   }
   return charts;
 }
@@ -686,202 +708,210 @@ function mdToHtml(text) {
 }
 
 function renderNewsletter(text, charts) {
-  var body = document.getElementById('newsletterBody');
-  if (!body) return;
-  var charts = charts || chartsByType[currentType] || [];
-  var ci=0, html='', pos=0;
-
-  while (true) {
-    var s = text.indexOf(CHART_OPEN,pos); if(s===-1){ html+=mdToHtml(text.substring(pos)); break; }
-    html += mdToHtml(text.substring(pos,s));
-    var e = text.indexOf(FENCE_CLOSE, s+CHART_OPEN.length); if(e===-1){ html+=mdToHtml(text.substring(pos)); break; }
+  var body=document.getElementById('newsletterBody'); if(!body) return;
+  var ci=0,html='',pos=0;
+  while(true){
+    var s=text.indexOf(CHART_OPEN,pos); if(s===-1){html+=mdToHtml(text.substring(pos));break;}
+    html+=mdToHtml(text.substring(pos,s));
+    var e=text.indexOf(FENCE_CLOSE,s+CHART_OPEN.length); if(e===-1){html+=mdToHtml(text.substring(pos));break;}
     var id='chart-inline-'+ci; ci++;
     html+='<div class="chart-embed"><div class="chart-label">Chart '+ci+'</div><canvas id="'+id+'" height="180"></canvas></div>';
-    pos = e+FENCE_CLOSE.length;
+    pos=e+FENCE_CLOSE.length;
   }
+  body.innerHTML=html;
+  body.contentEditable=isEditMode?'true':'false';
+  body.style.outline=isEditMode?'2px solid var(--primary)':'none';
 
-  body.innerHTML = html;
-  body.contentEditable = isEditMode ? 'true' : 'false';
-  body.style.outline = isEditMode ? '2px solid var(--primary)' : 'none';
-  body.style.cursor  = isEditMode ? 'text' : 'default';
-
-  setTimeout(function() {
-    for (var i=0;i<charts.length;i++) {
+  setTimeout(function(){
+    if(!charts||!charts.length) return;
+    for(var i=0;i<charts.length;i++){
       var c=document.getElementById('chart-inline-'+i);
-      if(c) renderSingleChart(c, charts[i]);
+      if(c) renderSingleChart(c,charts[i]);
     }
-  }, 60);
+  },60);
 }
 
 /* =============================================================
    EDIT MODE
    ============================================================= */
 function toggleEdit() {
-  isEditMode = !isEditMode;
-  var body   = document.getElementById('newsletterBody');
-  var btn    = document.getElementById('editToggleBtn');
-  if (!body) return;
-  body.contentEditable = isEditMode ? 'true' : 'false';
-  body.style.outline   = isEditMode ? '2px solid var(--primary)' : 'none';
-  body.style.cursor    = isEditMode ? 'text' : 'default';
-  if (btn) btn.textContent = isEditMode ? 'Done Editing' : 'Edit';
-  if (isEditMode) {
-    showStatus('loading', 'Edit mode on. Click anywhere in the newsletter to edit.');
-    body.focus();
-  } else {
-    showStatus('success', 'Edits saved. Use Copy or Export to save your changes.');
-    /* Sync edited content back to newsletters store */
-    newsletters[currentType] = body.innerText;
+  isEditMode=!isEditMode;
+  var body=document.getElementById('newsletterBody'), btn=document.getElementById('editToggleBtn');
+  if(!body) return;
+  body.contentEditable=isEditMode?'true':'false';
+  body.style.outline=isEditMode?'2px solid var(--primary)':'none';
+  body.style.cursor=isEditMode?'text':'default';
+  if(btn) btn.textContent=isEditMode?'Done Editing':'Edit';
+  if(isEditMode){showStatus('loading','Edit mode on. Click in the newsletter to edit text.');body.focus();}
+  else{
+    /* Sync edits back to newsletter store (text only, charts stay separate) */
+    newsletters[currentType]=body.innerText;
+    showStatus('success','Edits saved.');
   }
 }
 
 /* =============================================================
-   SHARE (read-only investor view)
+   SHARE LINK (via Cloudflare KV)
    ============================================================= */
-function shareNewsletter() {
-  var text = newsletters[currentType];
-  if (!text) { showStatus('error','Generate a newsletter first.'); return; }
+async function shareNewsletter() {
+  var text=newsletters[currentType];
+  if(!text){showStatus('error','Generate a newsletter first.');return;}
 
-  /* Strip chart JSON and encode as URL param */
-  var clean = stripCharts(text);
-  var label = SHEET_CONFIGS[currentType] ? SHEET_CONFIGS[currentType].label : 'Newsletter';
-  var encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(clean))));
-  var shareUrl = window.location.origin + window.location.pathname +
-                 '?view=1&type=' + currentType + '&title=' + encodeURIComponent(label) +
-                 '&content=' + encoded;
+  showStatus('loading','Creating share link...');
+  try {
+    var cfg=SHEET_CONFIGS[currentType]||{};
+    var clean=stripCharts(text);
+    var resp=await fetch(WORKER_URL+'/newsletter',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:clean, type:currentType, title:cfg.label+' Newsletter'})
+    });
+    if(!resp.ok) throw new Error('Worker returned '+resp.status);
+    var result=await resp.json();
+    if(result.error) throw new Error(result.error);
 
-  navigator.clipboard.writeText(shareUrl).then(function() {
-    showStatus('success', 'Share link copied to clipboard. Anyone with the link can view this newsletter.');
-  }).catch(function() {
-    /* Fallback: open in new tab */
-    window.open(shareUrl, '_blank');
-    showStatus('success', 'Newsletter opened in new tab. Copy the URL to share.');
-  });
+    var shareUrl=window.location.origin+window.location.pathname+'?view='+result.id+'&type='+currentType;
+    await navigator.clipboard.writeText(shareUrl);
+    showStatus('success','Share link copied: '+shareUrl+' (valid 90 days)');
+  } catch(err) {
+    console.error('Share error:',err);
+    showStatus('error','Share failed: '+err.message+'. Make sure the Cloudflare KV is set up.');
+  }
 }
 
-/* Check on load if we are in view-only mode */
+/* =============================================================
+   VIEW MODE (investor read-only)
+   ============================================================= */
 (function checkViewMode() {
-  var params = new URLSearchParams(window.location.search);
-  if (params.get('view') !== '1') return;
+  var params=new URLSearchParams(window.location.search);
+  var viewId=params.get('view');
+  if(!viewId) return;
 
-  /* Hide controls, show read-only newsletter */
-  var app = document.querySelector('.app');
-  var controls = document.querySelector('.controls');
-  if (controls) controls.style.display = 'none';
-  if (app) app.style.gridTemplateColumns = '1fr';
+  /* Hide controls */
+  var controls=document.querySelector('.controls'); if(controls) controls.style.display='none';
+  var app=document.querySelector('.app'); if(app) app.style.gridTemplateColumns='1fr';
 
-  var title   = params.get('title') || 'Investor Newsletter';
-  var type    = params.get('type')  || 'tsh';
-  var content = params.get('content');
+  var type=params.get('type')||'tsh';
+  var cfg=SHEET_CONFIGS[type]||{label:'Newsletter',brand:'sagehouse'};
+  document.documentElement.setAttribute('data-brand',cfg.brand);
 
-  if (content) {
-    try {
-      var decoded = decodeURIComponent(escape(atob(content)));
-      /* Set brand based on type */
-      var brand = (SHEET_CONFIGS[type] && SHEET_CONFIGS[type].brand) || 'sagehouse';
-      document.documentElement.setAttribute('data-brand', brand);
-      document.getElementById('outputTitle').textContent = title;
-      document.getElementById('emptyState').style.display = 'none';
-      document.getElementById('newsletterContent').style.display = 'block';
-      /* Remove action buttons in view mode */
-      var exportBar = document.querySelector('.export-bar');
-      if (exportBar) exportBar.style.display = 'none';
-      /* Render text only (no charts in share URL - too large) */
-      var body = document.getElementById('newsletterBody');
-      if (body) body.innerHTML = mdToHtml(decoded);
-    } catch(e) { console.error('View mode decode error:', e); }
-  }
+  /* Update OG meta tags */
+  var ogImg=document.getElementById('og-image');
+  var ogTitle=document.getElementById('og-title');
+  var ogDesc=document.getElementById('og-description');
+  if(ogImg)   ogImg.setAttribute('content', OG_IMAGES[cfg.brand]||OG_IMAGES.sagehouse);
+  if(ogTitle) ogTitle.setAttribute('content', cfg.label+' — Investor Newsletter');
+  if(ogDesc)  ogDesc.setAttribute('content','Monthly investor update from The SageHouse portfolio.');
+
+  var titleEl=document.getElementById('outputTitle'); if(titleEl) titleEl.textContent=cfg.label+' Newsletter';
+
+  /* Fetch newsletter from KV */
+  fetch(WORKER_URL+'/newsletter?id='+encodeURIComponent(viewId))
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.error) throw new Error(data.error);
+      document.getElementById('emptyState').style.display='none';
+      document.getElementById('newsletterContent').style.display='block';
+      /* Hide action buttons in view mode */
+      var bar=document.querySelector('.export-bar'); if(bar) bar.style.display='none';
+      var picker=document.getElementById('chartPickerPanel'); if(picker) picker.style.display='none';
+      var tabs=document.querySelector('.tabs'); if(tabs) tabs.style.display='none';
+      /* Render prose only */
+      var body=document.getElementById('newsletterBody');
+      if(body) body.innerHTML=mdToHtml(data.text||'');
+      document.getElementById('outputMeta').textContent=
+        data.date?new Date(data.date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'';
+    })
+    .catch(function(err){
+      var body=document.getElementById('newsletterBody');
+      if(body) body.innerHTML='<p style="color:var(--muted)">Newsletter not found or link has expired.</p>';
+      document.getElementById('emptyState').style.display='none';
+      document.getElementById('newsletterContent').style.display='block';
+    });
 })();
 
 /* =============================================================
    CHARTS
    ============================================================= */
 function getColors() {
-  var brand = document.documentElement.getAttribute('data-brand');
-  /* proof3 dark bg: use high-contrast white/light colors */
-  return brand === 'proof3'
-    ? { primary: '#ffffff', secondary: '#3d9cb5', negative: '#ff6b6b', grid: '#2d3f52' }
-    : { primary: '#13474A', secondary: '#F1CC6C', negative: '#C0392B', grid: '#ede8e0' };
+  var brand=document.documentElement.getAttribute('data-brand');
+  return brand==='proof3'
+    ?{primary:'#ffffff',secondary:'#3d9cb5',negative:'#ff6b6b',grid:'#2d3f52',text:'#f0f4f8'}
+    :{primary:'#13474A',secondary:'#F1CC6C',negative:'#C0392B',grid:'#ede8e0',text:'#303030'};
 }
 
 function renderChartsTab() {
-  var grid   = document.getElementById('chartsGrid');
-  var charts = chartsByType[currentType] || [];
-  grid.innerHTML = '';
-  if (!charts.length) {
-    grid.innerHTML = '<p style="color:var(--muted);padding:20px">No charts for this newsletter type yet.</p>';
+  var grid=document.getElementById('chartsGrid');
+  var charts=allCharts[currentType]||[];
+  grid.innerHTML='';
+  if(!charts.length){
+    grid.innerHTML='<p style="color:var(--muted);padding:20px">No charts for this newsletter type.</p>';
     return;
   }
-  for (var i=0;i<charts.length;i++) {
-    (function(chart,idx) {
-      var card = document.createElement('div');
+  var sel=selectedCharts[currentType]||[];
+  for(var i=0;i<charts.length;i++){
+    (function(chart,idx){
+      var isSelected=sel.indexOf(chart)>=0;
+      var card=document.createElement('div');
       card.className='chart-card';
-      card.innerHTML='<div class="chart-card-title">'+(chart.title||'Chart '+(idx+1))+'</div><canvas id="chart-tab-'+idx+'" height="220"></canvas>';
+      card.style.opacity=isSelected?'1':'0.5';
+      card.innerHTML='<div class="chart-card-title">'+(isSelected?'':'[hidden] ')+(chart.title||'Chart '+(idx+1))+'</div><canvas id="chart-tab-'+idx+'" height="220"></canvas>';
       grid.appendChild(card);
-      setTimeout(function() {
-        var c=document.getElementById('chart-tab-'+idx); if(c) renderSingleChart(c,chart);
-      },60);
+      setTimeout(function(){var c=document.getElementById('chart-tab-'+idx);if(c)renderSingleChart(c,chart);},60);
     })(charts[i],i);
   }
 }
 
-function renderSingleChart(canvas, chart) {
-  if (!chart||!chart.data||!chart.series||!chart.data.length) return null;
-  var colors = getColors();
-  var labels = chart.data.map(function(d){return d.date||d.month||'';});
-  var datasets = chart.series.map(function(s,si) {
-    /* For proof3 dark theme, override colors with high-contrast versions */
-    var brand = document.documentElement.getAttribute('data-brand');
-    var color;
-    if (brand === 'proof3') {
-      color = si===0 ? '#ffffff' : '#3d9cb5';
-    } else {
-      color = s.color || (si===0 ? colors.primary : colors.secondary);
-    }
-    var vals = chart.data.map(function(d){return d[s.key]||0;});
-    var isBar = chart.type==='bar';
+function renderSingleChart(canvas,chart) {
+  if(!chart||!chart.data||!chart.series||!chart.data.length) return null;
+  var colors=getColors();
+  var labels=chart.data.map(function(d){return d.date||d.month||'';});
+  var datasets=chart.series.map(function(s,si){
+    var brand=document.documentElement.getAttribute('data-brand');
+    var color = brand==='proof3' ? (si===0?'#ffffff':'#3d9cb5') : (s.color||(si===0?colors.primary:colors.secondary));
+    var vals=chart.data.map(function(d){return d[s.key]||0;});
+    var isBar=chart.type==='bar';
     return {
-      label: s.name, data: vals,
-      backgroundColor: isBar ? vals.map(function(v){return v<0?colors.negative+'55':color+'55';}) : color+'33',
-      borderColor:     isBar ? vals.map(function(v){return v<0?colors.negative:color;}) : color,
-      borderWidth: 2, fill: chart.type==='area', tension: 0.35,
-      pointRadius: chart.data.length>24?1:3, pointHoverRadius:5
+      label:s.name, data:vals,
+      backgroundColor:isBar?vals.map(function(v){return v<0?colors.negative+'55':color+'55';}):color+'33',
+      borderColor:    isBar?vals.map(function(v){return v<0?colors.negative:color;}):color,
+      borderWidth:2, fill:chart.type==='area', tension:0.35,
+      pointRadius:chart.data.length>24?1:3, pointHoverRadius:5
     };
   });
   try {
-    return new Chart(canvas, {
-      type: chart.type==='area'?'line':(chart.type||'bar'),
-      data: {labels:labels, datasets:datasets},
-      options: {
+    return new Chart(canvas,{
+      type:chart.type==='area'?'line':(chart.type||'bar'),
+      data:{labels:labels,datasets:datasets},
+      options:{
         responsive:true,
-        plugins: {
-          legend: { display:datasets.length>1, position:'bottom', labels:{font:{size:10},boxWidth:10,padding:10,color:'var(--text)'} },
-          tooltip: { callbacks: { label: function(ctx) {
+        plugins:{
+          legend:{display:datasets.length>1,position:'bottom',labels:{font:{size:10},boxWidth:10,padding:10,color:colors.text}},
+          tooltip:{callbacks:{label:function(ctx){
             var v=ctx.parsed.y;
             if(Math.abs(v)>=1000000) return ctx.dataset.label+': $'+(v/1000000).toFixed(2)+'M';
             if(Math.abs(v)>=1000)    return ctx.dataset.label+': $'+(v/1000).toFixed(1)+'k';
             return ctx.dataset.label+': '+v;
           }}}
         },
-        scales: {
-          y: { grid:{color:colors.grid}, ticks:{font:{size:10}, callback:function(v) {
+        scales:{
+          y:{grid:{color:colors.grid},ticks:{color:colors.text,font:{size:10},callback:function(v){
             if(Math.abs(v)>=1000000) return '$'+(v/1000000).toFixed(1)+'M';
             if(Math.abs(v)>=1000)    return '$'+(v/1000).toFixed(0)+'k';
             return v;
           }}},
-          x: {grid:{display:false},ticks:{font:{size:9},maxTicksLimit:chart.data.length>24?12:24,maxRotation:45,color:'var(--text)'}}
+          x:{grid:{display:false},ticks:{color:colors.text,font:{size:9},maxTicksLimit:chart.data.length>24?12:24,maxRotation:45}}
         }
       }
     });
-  } catch(e) { console.error('Chart render error:',e); return null; }
+  } catch(e){console.error('Chart render error:',e);return null;}
 }
 
 /* =============================================================
-   EXPORT / COPY
+   EXPORT
    ============================================================= */
 function stripCharts(text) {
-  var result='', pos=0;
-  while (true) {
+  var result='',pos=0;
+  while(true){
     var s=text.indexOf(CHART_OPEN,pos); if(s===-1){result+=text.substring(pos);break;}
     result+=text.substring(pos,s);
     var e=text.indexOf(FENCE_CLOSE,s+CHART_OPEN.length); if(e===-1) break;
@@ -891,113 +921,87 @@ function stripCharts(text) {
 }
 
 function getExportText() {
-  /* If in edit mode, get from DOM; otherwise get from store */
-  var body = document.getElementById('newsletterBody');
-  if (isEditMode && body) return body.innerText;
-  var stored = newsletters[currentType];
-  return stored ? stripCharts(stored) : '';
+  var body=document.getElementById('newsletterBody');
+  if(isEditMode&&body) return body.innerText;
+  var stored=newsletters[currentType];
+  return stored?stripCharts(stored):'';
 }
 
 function copyNewsletter() {
-  var text = getExportText();
-  if (!text) { showStatus('error','Nothing to copy.'); return; }
-  navigator.clipboard.writeText(text).then(function() {
-    showStatus('success','Newsletter copied to clipboard.');
-  }).catch(function(){ showStatus('error','Copy failed.'); });
+  var t=getExportText(); if(!t){showStatus('error','Nothing to copy.');return;}
+  navigator.clipboard.writeText(t).then(function(){showStatus('success','Copied to clipboard.');})
+    .catch(function(){showStatus('error','Copy failed.');});
 }
 
 function exportToDoc() {
-  var text = getExportText();
-  if (!text) { showStatus('error','Nothing to export.'); return; }
-  navigator.clipboard.writeText(text).then(function() {
+  var t=getExportText(); if(!t){showStatus('error','Nothing to export.');return;}
+  navigator.clipboard.writeText(t).then(function(){
     showStatus('success','Copied. Opening Google Docs - paste with Cmd+V.');
-    setTimeout(function(){ window.open('https://docs.google.com/document/create','_blank'); },800);
-  }).catch(function(){ showStatus('error','Copy failed.'); });
+    setTimeout(function(){window.open('https://docs.google.com/document/create','_blank');},800);
+  }).catch(function(){showStatus('error','Copy failed.');});
 }
 
 /* =============================================================
    PROMPT BUILDER
    ============================================================= */
-function buildPrompts(type, sd, filteredTable, rangeLabel, ctx) {
-  var cfg = SHEET_CONFIGS[type];
-  var co  = CHART_OPEN, fc = FENCE_CLOSE;
-
-  var audienceMap = {
-    all:    'Internal owner view across all 7 entities. Full picture: SageHouse Group financials, SPV1 structure, proof3 operating metrics, and total portfolio position.',
-    tsh:    'SageHouse Group investors (TSH + SHC + SHA). They care about total portfolio performance, advisory revenue, cash position, and proof3 as the primary operating asset. Give proof3 a headline update only.',
-    spv1:   'SPV1 standalone investors. They care about SPV1 balance sheet health, the convertible note structure, and proof3 as the underlying asset.',
-    p3spv:  'proof3 and SPV1 investors. Member count and trajectory, gym revenue, coaching revenue, total burn, path to profitability. Do NOT include broader SageHouse portfolio updates.',
-    p3only: 'proof3 operating investors (Training + Coaching + Gym 1). Member count, revenue by stream, burn, path to breakeven. Exclude SPV1 balance sheet entirely.'
+function buildPrompts(type,sd,filteredTable,rangeLabel,ctx) {
+  var cfg=SHEET_CONFIGS[type];
+  var co=CHART_OPEN, fc=FENCE_CLOSE;
+  var audienceMap={
+    all:    'Internal owner view across all 7 entities. Full picture: SageHouse Group, SPV1 structure, proof3 operating metrics, total portfolio.',
+    tsh:    'SageHouse Group investors (TSH + SHC + SHA). Total portfolio performance, advisory revenue, cash position. proof3 headline only.',
+    spv1:   'SPV1 standalone investors. SPV1 balance sheet health, convertible note structure, proof3 as the underlying asset.',
+    p3spv:  'proof3 and SPV1 investors. Member count, gym revenue, coaching revenue, burn rate, path to profitability. No broader SageHouse portfolio.',
+    p3only: 'proof3 operating investors (Training + Coaching + Gym 1). Member count, revenue by stream, burn, path to breakeven. Exclude SPV1.'
   };
-
-  var lines=[];
-  var g=ctx.gym;
-  if(g.membersNow) {
-    lines.push('proof3 Gym 1 (Salt River) member data this month:');
-    lines.push('  Active members: '+g.membersNow+' (prior: '+(g.membersPrior||'n/a')+', net: '+(g.netChange||'n/a')+')');
-    if(g.trials)     lines.push('  Trials: '+g.trials);
-    if(g.holds)      lines.push('  On hold: '+g.holds);
+  var lines=[], g=ctx.gym;
+  if(g.membersNow){
+    lines.push('proof3 Gym 1 member data this month:');
+    lines.push('  Active: '+g.membersNow+' (prior: '+(g.membersPrior||'n/a')+', net: '+(g.netChange||'n/a')+')');
+    if(g.trials) lines.push('  Trials: '+g.trials);
+    if(g.holds)  lines.push('  On hold: '+g.holds);
     if(g.newMembers) lines.push('  New: '+g.newMembers);
     if(g.churned)    lines.push('  Churned: '+g.churned);
     if(g.target)     lines.push('  Target: '+g.target);
   }
-  if(g.memberStory)         lines.push('\nMember story:\n'+g.memberStory);
-  if(ctx.coaching.clients)  lines.push('\nproof3 Online Coaching clients: '+ctx.coaching.clients);
-  if(ctx.portfolio)         lines.push('\nPortfolio updates:\n'+ctx.portfolio);
-  if(ctx.debt)              lines.push('\nDebt/note structure:\n'+ctx.debt);
-  if(ctx.unusual)           lines.push('\nUnusual items:\n'+ctx.unusual);
-  if(ctx.focus)             lines.push('\nJim focused on:\n'+ctx.focus);
-  var opCtx = lines.join('\n');
+  if(g.memberStory)        lines.push('\nMember story:\n'+g.memberStory);
+  if(ctx.coaching.clients) lines.push('\nproof3 Coaching clients: '+ctx.coaching.clients);
+  if(ctx.portfolio)        lines.push('\nPortfolio updates:\n'+ctx.portfolio);
+  if(ctx.debt)             lines.push('\nDebt structure:\n'+ctx.debt);
+  if(ctx.unusual)          lines.push('\nUnusual items:\n'+ctx.unusual);
+  if(ctx.focus)            lines.push('\nJim focused on:\n'+ctx.focus);
+  var opCtx=lines.join('\n');
 
-  var isP3 = (type==='p3spv'||type==='p3only'||type==='spv1');
-  var chartColors = isP3
-    ? '"#3d9cb5" (teal) primary, "#a8d4e0" (light blue) secondary'
-    : '"#13474A" (teal) primary, "#F1CC6C" (gold) secondary';
+  var isP3=(type==='p3spv'||type==='p3only'||type==='spv1');
+  var chartColors=isP3?'"#3d9cb5" primary, "#a8d4e0" secondary':'"#13474A" primary, "#F1CC6C" secondary';
+  var chartEx=co+'\n{"type":"bar","title":"Monthly Revenue","data":[{"date":"Jan 25","value":45000},{"date":"Feb 25","value":48000}],"series":[{"key":"value","name":"Revenue","color":"#13474A"}]}\n'+fc;
 
-  var chartEx = co+'\n{"type":"bar","title":"Monthly Revenue","data":[{"date":"Jan 25","value":45000},{"date":"Feb 25","value":48000}],"series":[{"key":"value","name":"Revenue","color":"#13474A"}]}\n'+fc;
-
-  var system =
+  var system=
     'You generate monthly investor newsletters for The SageHouse.\n\n'+
-    'ENTITY STRUCTURE:\n'+
-    'The SageHouse LLC (TSH) owns SageHouse Capital LLC (SHC) and SageHouse Advisors LLC (SHA).\n'+
-    'SHC is a pure holding company - no operating revenue of its own.\n'+
-    'SHA generates advisory and consulting revenue - historically the primary TSH revenue driver.\n'+
-    'SHC owns SageHouse Capital SPV1 LLC (SPV1), a fund vehicle for the proof3 investment.\n'+
-    'SPV1 owns proof3 Training Inc, which owns proof3 Coaching LLC and proof3 Gym 1 Phoenix LLC.\n'+
-    'TSH holds minority positions in early-stage fitness, health, and wellness tech companies.\n'+
-    'proof3 Gym 1 (Salt River, Scottsdale AZ) opened January 2025. Breakeven ~100-110 members.\n'+
-    'proof3 Coaching (online) is profitable. proof3 Gym 1 is pre-breakeven.\n\n'+
-    'INVESTOR AUDIENCE:\n'+(audienceMap[type]||audienceMap.all)+'\n\n'+
-    'WRITING VOICE - always write as Jim:\n'+
-    '- Direct, honest, personal. "I" for opinions/decisions, "we" for team actions.\n'+
-    '- Never use defensive framing. Share bad news as clearly as good news.\n'+
-    '- Mix strategic narrative with specific numbers naturally inside sentences.\n'+
-    '- Treat investors as trusted partners. No corporate language. No formal sign-offs.\n'+
-    '- Never reference team member names unless explicitly provided in context.\n'+
-    '- Never infer, fabricate, or assume facts not in the data or context.\n\n'+
-    'FORMAT:\n'+
-    '- 600-700 words maximum (prose only, not counting chart JSON).\n'+
-    '- No bullet lists anywhere - all readable prose.\n'+
-    '- Exactly 4 chart JSON blocks at natural narrative points.\n'+
-    '- 1-2 sentences before each chart explaining the so-what (not what the chart shows).\n'+
-    '- Personal forward-looking close, 2-3 sentences.\n\n'+
-    'CHART RULES - CRITICAL:\n'+
-    '- Only use data explicitly in the tables. Never fabricate data points.\n'+
-    '- x-axis key MUST be "date". Allowed types: "bar", "line", "area".\n'+
-    '- Colors: '+chartColors+'. Negative series: "#C0392B".\n'+
-    '- Use filtered data for trend charts. Use all-time data for inception charts.\n'+
-    '- Format:\n'+chartEx+'\n\n'+
+    'ENTITIES: TSH owns SHC and SHA. SHC is a holding company (no operating revenue). '+
+    'SHA generates advisory revenue. SHC owns SPV1, which owns proof3 Training Inc, '+
+    'which owns proof3 Coaching LLC and proof3 Gym 1 Phoenix LLC (Salt River, opened Jan 2025, breakeven ~100-110 members). '+
+    'proof3 Coaching (online) is profitable. TSH holds minority positions in fitness/health/wellness tech.\n\n'+
+    'AUDIENCE: '+(audienceMap[type]||audienceMap.all)+'\n\n'+
+    'VOICE (write as Jim): Direct, honest, first person. "I" for opinions, "we" for team. '+
+    'Never defensive framing. Share bad news as clearly as good. No corporate language. No formal sign-off. '+
+    'Never name team members unless given. Never fabricate data.\n\n'+
+    'FORMAT: 600-700 words prose. No bullet lists. Exactly 4 chart JSON blocks. '+
+    '1-2 sentences before each chart (so-what, not what it shows). Personal 2-3 sentence close.\n\n'+
+    'CHART RULES: Only use data in the tables. Never fabricate. x-axis key must be "date". '+
+    'Types: bar/line/area only. Colors: '+chartColors+'. Negative series: "#C0392B".\n'+
+    chartEx+'\n\n'+
     'DATA: '+sd.tabName+' | '+sd.rowCount+' months | '+sd.earliestDate+' to '+sd.latestDate+'\n'+
     'Intercompany eliminations already applied.\n';
 
-  var user =
+  var user=
     'Generate the '+cfg.label+' investor newsletter.\n\n'+
-    'FILTERED FINANCIAL DATA ('+rangeLabel+'):\n'+filteredTable+'\n\n'+
-    'ALL-TIME DATA (use for inception-to-date charts only):\n'+sd.allTime+'\n\n'+
-    (opCtx?'OPERATING CONTEXT THIS MONTH:\n'+opCtx+'\n\n':'')+
-    'Write the complete newsletter with exactly 4 chart JSON blocks. Keep prose under 700 words. Write entirely in Jim\'s voice.';
+    'FILTERED DATA ('+rangeLabel+'):\n'+filteredTable+'\n\n'+
+    'ALL-TIME DATA (inception charts only):\n'+sd.allTime+'\n\n'+
+    (opCtx?'CONTEXT THIS MONTH:\n'+opCtx+'\n\n':'')+
+    'Write newsletter with exactly 4 chart JSON blocks. Under 700 words prose. Jim\'s voice throughout.';
 
-  return {system:system, user:user};
+  return {system:system,user:user};
 }
 </script>
 </body>
