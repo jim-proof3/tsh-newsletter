@@ -59,7 +59,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: var(--font-ui); background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
     header { background: var(--header-bg); color: var(--header-text); padding: 0 28px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.25); transition: background 0.3s; }
-    .logo-sh { height: 26px; object-fit: contain; display: block; }
+    .logo-sh { height: 26px; object-fit: contain; display: block; filter: brightness(0) invert(1); }
     .logo-p3 { height: 28px; object-fit: contain; display: none; }
     [data-brand="proof3"] .logo-sh { display: none; }
     [data-brand="proof3"] .logo-p3 { display: block; }
@@ -296,9 +296,19 @@
         <div class="export-bar">
           <button class="export-btn" id="editToggleBtn" onclick="toggleEdit()">Edit</button>
           <button class="export-btn" onclick="showChartPicker()">Charts</button>
+          <button class="export-btn" onclick="showSavesPanel()">Saves</button>
+          <button class="export-btn" onclick="saveToCloud()">Save to Cloud</button>
           <button class="export-btn" onclick="copyNewsletter()">Copy</button>
           <button class="export-btn" onclick="exportToDoc()">Google Doc</button>
           <button class="export-btn primary" onclick="shareNewsletter()">Share</button>
+        </div>
+        <!-- Saves panel -->
+        <div id="savesPanel" style="display:none;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:720px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Saved Newsletters</div>
+            <div style="font-size:10px;color:var(--muted);">Auto-saved to this browser</div>
+          </div>
+          <div id="savesList"></div>
         </div>
         <!-- Chart picker panel -->
         <div id="chartPickerPanel" style="display:none;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:720px;">
@@ -317,6 +327,8 @@
 </div>
 
 <script>
+
+
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
@@ -426,6 +438,7 @@ function setType(type, cardEl) {
     })(cards[i]);
   }
   renderContextFields(currentType);
+  restoreAutoSaves();
 })();
 
 /* === NEWSLETTER STORAGE === */
@@ -607,6 +620,7 @@ async function generate() {
     if (!result.content || !result.content[0]) throw new Error('Empty response');
     var text = result.content[0].text;
     newsletters[currentType]    = text;
+    autoSave(currentType, text);
     allCharts[currentType]      = extractCharts(text);
     selectedCharts[currentType] = allCharts[currentType].slice();
     isEditMode = false;
@@ -667,7 +681,7 @@ function toggleEdit() {
   if (btn) btn.textContent = isEditMode ? 'Done Editing' : 'Edit';
   if (tb) { if (isEditMode) tb.classList.add('visible'); else tb.classList.remove('visible'); }
   if (isEditMode) { showStatus('loading', 'Edit mode on. Use toolbar for headers, drag images to insert.'); body.focus(); setupDragDrop(body); updateTOC(); }
-  else { showStatus('success', 'Edits saved.'); newsletters[currentType] = body.innerHTML; teardownDragDrop(body); }
+  else { showStatus('success', 'Edits saved.'); newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); teardownDragDrop(body); }
 }
 
 /* === DRAG & DROP IMAGES === */
@@ -977,6 +991,214 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx) {
     (opCtx ? 'CONTEXT THIS MONTH:\n' + opCtx + '\n\n' : '') +
     '4 chart JSON blocks with descriptive titles. Under 700 words. Write in Jim\'s voice.';
   return { system: system, user: user };
+}
+
+
+/* === AUTO-SAVE & NAMED SAVES === */
+
+var AUTOSAVE_KEY_PREFIX = 'sh_newsletter_autosave_';
+
+/* Auto-save current newsletter to localStorage */
+function autoSave(type, text) {
+  if (!text) return;
+  try {
+    var key = AUTOSAVE_KEY_PREFIX + type;
+    var payload = JSON.stringify({ text: text, savedAt: new Date().toISOString(), type: type, label: (SHEET_CONFIGS[type]||{}).label || type });
+    localStorage.setItem(key, payload);
+  } catch(e) { console.warn('Auto-save failed:', e); }
+}
+
+/* Load auto-saved newsletter from localStorage */
+function loadAutoSave(type) {
+  try {
+    var raw = localStorage.getItem(AUTOSAVE_KEY_PREFIX + type);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) { return null; }
+}
+
+/* Check for auto-saves on page load and restore them */
+function restoreAutoSaves() {
+  var types = ['all', 'p3spv'];
+  var restored = [];
+  for (var i = 0; i < types.length; i++) {
+    var saved = loadAutoSave(types[i]);
+    if (saved && saved.text) {
+      newsletters[types[i]] = saved.text;
+      allCharts[types[i]] = extractCharts(saved.text);
+      selectedCharts[types[i]] = allCharts[types[i]].slice();
+      restored.push(saved.label || types[i]);
+    }
+  }
+  if (restored.length > 0) {
+    showNewsletterForType(currentType);
+    showStatus('success', 'Restored saved newsletter' + (restored.length > 1 ? 's' : '') + ': ' + restored.join(', ') + '.');
+  }
+}
+
+/* Show the saves panel */
+function showSavesPanel() {
+  var panel = document.getElementById('savesPanel');
+  if (!panel) return;
+  if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+  refreshSavesPanel();
+  panel.style.display = 'block';
+}
+
+function refreshSavesPanel() {
+  var list = document.getElementById('savesList');
+  if (!list) return;
+  var html = '';
+
+  /* Section: Auto-saves (local) */
+  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px;">Auto-Saved (This Browser)</div>';
+  var types = ['all', 'p3spv'];
+  var hasLocal = false;
+  for (var i = 0; i < types.length; i++) {
+    var saved = loadAutoSave(types[i]);
+    if (saved) {
+      hasLocal = true;
+      var dt = saved.savedAt ? new Date(saved.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : 'Unknown time';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">' +
+              '<div><div style="font-size:12px;font-weight:600;">' + (saved.label||saved.type) + '</div>' +
+              '<div style="font-size:10px;color:var(--muted);">Auto-saved ' + dt + '</div></div>' +
+              '<div style="display:flex;gap:6px;">' +
+              '<button onclick="loadSave(\'' + saved.type + '\', true)" style="padding:4px 10px;border:1px solid var(--primary);border-radius:4px;background:transparent;color:var(--primary);font-size:11px;cursor:pointer;">Load</button>' +
+              '<button onclick="deleteSave(\'' + saved.type + '\', true)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;">Delete</button>' +
+              '</div></div>';
+    }
+  }
+  if (!hasLocal) html += '<div style="font-size:12px;color:var(--muted);padding:8px 0;">No auto-saved drafts.</div>';
+
+  /* Section: Named cloud saves */
+  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 6px;">Named Cloud Saves (90-day KV)</div>';
+  var refs = getCloudSaveRefs();
+  if (refs.length === 0) {
+    html += '<div style="font-size:12px;color:var(--muted);padding:8px 0;">No named saves yet. Click Save to Cloud to create one.</div>';
+  } else {
+    for (var j = 0; j < refs.length; j++) {
+      var ref = refs[j];
+      var dt2 = ref.savedAt ? new Date(ref.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">' +
+              '<div><div style="font-size:12px;font-weight:600;">' + ref.name + '</div>' +
+              '<div style="font-size:10px;color:var(--muted);">' + (ref.title||'') + (dt2 ? ' &middot; ' + dt2 : '') + '</div></div>' +
+              '<div style="display:flex;gap:6px;">' +
+              '<button onclick="loadCloudSave(\'' + ref.id + '\', \'' + ref.type + '\')" style="padding:4px 10px;border:1px solid var(--primary);border-radius:4px;background:transparent;color:var(--primary);font-size:11px;cursor:pointer;">Load</button>' +
+              '<button onclick="deleteCloudSaveRef(\'' + ref.id + '\');refreshSavesPanel();" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;">Remove</button>' +
+              '</div></div>';
+    }
+  }
+
+  list.innerHTML = html;
+}
+
+function loadSave(type, isLocal) {
+  var saved = isLocal ? loadAutoSave(type) : null;
+  if (!saved || !saved.text) { showStatus('error', 'Save not found.'); return; }
+  newsletters[type] = saved.text;
+  allCharts[type] = extractCharts(saved.text);
+  selectedCharts[type] = allCharts[type].slice();
+  /* Switch to that type */
+  var cards = document.querySelectorAll('[data-type="' + type + '"]');
+  if (cards.length > 0) setType(type, cards[0]);
+  else showNewsletterForType(type);
+  document.getElementById('savesPanel').style.display = 'none';
+  showStatus('success', 'Newsletter loaded.');
+}
+
+function deleteSave(type, isLocal) {
+  if (isLocal) {
+    try { localStorage.removeItem(AUTOSAVE_KEY_PREFIX + type); } catch(e) {}
+  }
+  refreshSavesPanel();
+  showStatus('success', 'Save deleted.');
+}
+
+
+/* === NAMED KV SAVES === */
+
+/* Save current newsletter to KV with a user-provided name */
+async function saveToCloud() {
+  var text = newsletters[currentType];
+  if (!text) { showStatus('error', 'Generate a newsletter first.'); return; }
+  var name = prompt('Name this save (e.g. "April 2026 - draft 1"):');
+  if (!name || !name.trim()) return;
+  showStatus('loading', 'Saving to cloud...');
+  try {
+    var cfg = SHEET_CONFIGS[currentType] || {};
+    var body = document.getElementById('newsletterBody');
+    var content = (body && body.innerHTML) ? body.innerHTML : text;
+    var resp = await fetch(WORKER_URL + '/newsletter', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: content,
+        type: currentType,
+        title: (cfg.label || '') + ' Newsletter',
+        name: name.trim(),
+        named: true
+      })
+    });
+    if (!resp.ok) throw new Error('Worker ' + resp.status);
+    var result = await resp.json();
+    if (result.error) throw new Error(result.error);
+    showStatus('success', 'Saved to cloud as "' + name.trim() + '" (ID: ' + result.id + ')');
+    /* Also store the ID locally so we can list it */
+    storeCloudSaveRef(result.id, name.trim(), currentType, (cfg.label || '') + ' Newsletter');
+    refreshSavesPanel();
+  } catch(err) {
+    console.error('Cloud save error:', err);
+    showStatus('error', 'Save failed: ' + err.message);
+  }
+}
+
+/* Store a reference to a cloud save in localStorage so we can list them */
+var CLOUD_REFS_KEY = 'sh_newsletter_cloud_refs';
+
+function storeCloudSaveRef(id, name, type, title) {
+  try {
+    var refs = getCloudSaveRefs();
+    refs.unshift({ id: id, name: name, type: type, title: title, savedAt: new Date().toISOString() });
+    /* Keep max 20 refs */
+    if (refs.length > 20) refs = refs.slice(0, 20);
+    localStorage.setItem(CLOUD_REFS_KEY, JSON.stringify(refs));
+  } catch(e) { console.warn('Could not store cloud ref:', e); }
+}
+
+function getCloudSaveRefs() {
+  try {
+    var raw = localStorage.getItem(CLOUD_REFS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+}
+
+function deleteCloudSaveRef(id) {
+  try {
+    var refs = getCloudSaveRefs().filter(function(r) { return r.id !== id; });
+    localStorage.setItem(CLOUD_REFS_KEY, JSON.stringify(refs));
+  } catch(e) {}
+}
+
+/* Load a cloud save by ID */
+async function loadCloudSave(id, type) {
+  showStatus('loading', 'Loading from cloud...');
+  try {
+    var resp = await fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id));
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    var t = type || data.type || currentType;
+    newsletters[t] = data.text || '';
+    allCharts[t] = extractCharts(data.text || '');
+    selectedCharts[t] = allCharts[t].slice();
+    autoSave(t, data.text || '');
+    var cards = document.querySelectorAll('[data-type="' + t + '"]');
+    if (cards.length > 0) setType(t, cards[0]);
+    else showNewsletterForType(t);
+    document.getElementById('savesPanel').style.display = 'none';
+    showStatus('success', 'Newsletter loaded from cloud.');
+  } catch(err) {
+    showStatus('error', 'Load failed: ' + err.message + '. Link may have expired (90 day limit).');
+  }
 }
 </script>
 </body>
