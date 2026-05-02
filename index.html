@@ -109,6 +109,7 @@
     .chart-label { font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; }
     .export-bar { display: flex; gap: 10px; margin-top: 16px; max-width: 720px; }
     .export-btn { padding: 9px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 2px solid var(--primary); color: var(--primary); background: var(--surface); }
+        .toggle-btn.active { background: var(--primary); color: white; }
     .export-btn:hover { background: var(--primary); color: white; }
     .export-btn.primary { background: var(--gold); border-color: var(--gold); color: #303030; }
     .export-btn.primary:hover { opacity: 0.85; }
@@ -192,7 +193,12 @@
     [data-brand="proof3"] canvas {
       filter: none;
     }
-  </style>
+  
+        .drop-target-highlight { outline: 2px dashed var(--primary); outline-offset: 4px; background: var(--primary-soft, rgba(19,71,74,0.06)); border-radius: 6px; }
+        .chart-draggable:hover .drag-handle { opacity: 1; }
+        .chart-draggable[draggable=true] { cursor: grab; }
+        .chart-draggable[draggable=true]:active { cursor: grabbing; }
+        </style>
 </head>
 <body>
 
@@ -271,7 +277,7 @@
       </div>
       <div id="newsletterContent" style="display:none">
         <!-- Edit toolbar - shown only in edit mode -->
-        <div id="editToolbar" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;max-width:720px;display:none;align-items:center;gap:6px;flex-wrap:wrap;">
+        <div id="editToolbar" style="display:none;position:sticky;top:8px;z-index:50;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;max-width:720px;align-items:center;gap:6px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,0.10);">
           <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-right:4px;">Format</span>
           <button onclick="insertHeader(1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;">H1</button>
           <button onclick="insertHeader(2)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">H2</button>
@@ -295,8 +301,8 @@
         </div>
         <div class="export-bar">
           <button class="export-btn" id="editToggleBtn" onclick="toggleEdit()">Edit</button>
-          <button class="export-btn" onclick="showChartPicker()">Charts</button>
-          <button class="export-btn" onclick="showSavesPanel()">Saves</button>
+          <button class="export-btn toggle-btn" id="chartPickerBtn" onclick="toggleChartPicker()" title="Show/hide chart selector">&#9783; Charts</button>
+          <button class="export-btn toggle-btn" id="savesPanelBtn" onclick="toggleSavesPanel()" title="Show/hide saves">&#128190; Saves</button>
           <button class="export-btn" onclick="saveToCloud()">Save to Cloud</button>
           <button class="export-btn" onclick="copyNewsletter()">Copy</button>
           <button class="export-btn" onclick="exportToDoc()">Google Doc</button>
@@ -343,11 +349,37 @@
         <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;">
           <div>
             <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">Start Month</label>
-            <input type="month" id="chartBuilderStart" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);">
+            <div style="display:flex;gap:4px;">
+              <select id="chartBuilderStartMonth" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:7px 6px;font-size:12px;color:var(--text);background:var(--bg);">
+                <option value="">Mo</option>
+                <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option>
+                <option value="04">Apr</option><option value="05">May</option><option value="06">Jun</option>
+                <option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option>
+                <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+              </select>
+              <select id="chartBuilderStartYear" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:7px 6px;font-size:12px;color:var(--text);background:var(--bg);">
+                <option value="">Yr</option>
+                <option>2018</option><option>2019</option><option>2020</option><option>2021</option>
+                <option>2022</option><option>2023</option><option>2024</option><option>2025</option><option>2026</option>
+              </select>
+            </div>
           </div>
           <div>
             <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">End Month</label>
-            <input type="month" id="chartBuilderEnd" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);">
+            <div style="display:flex;gap:4px;">
+              <select id="chartBuilderEndMonth" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:7px 6px;font-size:12px;color:var(--text);background:var(--bg);">
+                <option value="">Mo</option>
+                <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option>
+                <option value="04">Apr</option><option value="05">May</option><option value="06">Jun</option>
+                <option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option>
+                <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+              </select>
+              <select id="chartBuilderEndYear" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:7px 6px;font-size:12px;color:var(--text);background:var(--bg);">
+                <option value="">Yr</option>
+                <option>2018</option><option>2019</option><option>2020</option><option>2021</option>
+                <option>2022</option><option>2023</option><option>2024</option><option>2025</option><option>2026</option>
+              </select>
+            </div>
           </div>
           <button onclick="buildCustomChart()" style="padding:7px 16px;background:var(--primary);color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Add Chart</button>
         </div>
@@ -360,6 +392,8 @@
 </div>
 
 <script>
+
+
 
 
 
@@ -457,6 +491,26 @@ function renderContextFields(type) {
 /* === TYPE SWITCHING === */
 function setType(type, cardEl) {
   if (!SHEET_CONFIGS[type]) return;
+  if (isEditMode) {
+    if (!confirm('You have unsaved edits. Save them now before switching?\n\nOK = save edits first\nCancel = discard edits and switch')) {
+      /* discard: exit edit mode without saving */
+      isEditMode = false;
+      var body = document.getElementById('newsletterBody');
+      var btn  = document.getElementById('editToggleBtn');
+      var tb   = document.getElementById('editToolbar');
+      if (body) { body.contentEditable = 'false'; body.style.outline = 'none'; body.style.cursor = 'default'; }
+      if (btn) btn.textContent = 'Edit';
+      if (tb)  tb.classList.remove('visible');
+    } else {
+      /* save: commit edits then switch */
+      var body = document.getElementById('newsletterBody');
+      if (body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); }
+      isEditMode = false;
+      var btn = document.getElementById('editToggleBtn'); if (btn) btn.textContent = 'Edit';
+      var tb  = document.getElementById('editToolbar');  if (tb)  tb.classList.remove('visible');
+      if (body) { body.contentEditable = 'false'; body.style.outline = 'none'; body.style.cursor = 'default'; }
+    }
+  }
   currentType = type;
   var cfg = SHEET_CONFIGS[type];
   var cards = document.querySelectorAll('.type-card');
@@ -758,42 +812,19 @@ function buildOpsContext(ops) {
   return lines.join('\n');
 }
 
-/* Add ops metrics to chart builder dropdown */
-function populateChartBuilderOpsMetrics(ops) {
-  if (!ops || !ops.dataRows || !ops.dataRows.length) return;
-  var sel = document.getElementById('chartBuilderMetric');
-  if (!sel) return;
-  var divider = document.createElement('option');
-  divider.disabled = true; divider.textContent = '── Operating Metrics ──';
-  sel.appendChild(divider);
-  var m = ops.idxMap;
-  var opsColNames = [
-    { idx: m.gymActive,       name: 'Gym Active Members'        },
-    { idx: m.gymTrials,       name: 'Gym Trial Members'         },
-    { idx: m.gymHolds,        name: 'Gym Members on Hold'       },
-    { idx: m.gymNew,          name: 'Gym New Members'           },
-    { idx: m.gymChurned,      name: 'Gym Churned Members'       },
-    { idx: m.gymNetChange,    name: 'Gym Net Member Change'     },
-    { idx: m.gymTarget,       name: 'Gym Member Target'         },
-    { idx: m.coachingActive,  name: 'Coaching Active Clients'   },
-    { idx: m.coachingNew,     name: 'Coaching New Clients'      },
-    { idx: m.coachingChurned, name: 'Coaching Churned Clients'  },
-    { idx: m.gymRevPerMember, name: 'Gym Revenue per Member'    },
-    { idx: m.coachRevPerClient, name: 'Coaching Revenue per Client' }
-  ];
-  for (var i = 0; i < opsColNames.length; i++) {
-    if (opsColNames[i].idx < 0) continue;
-    var o = document.createElement('option');
-    o.value    = 'ops:' + opsColNames[i].idx;
-    o.textContent = opsColNames[i].name;
-    sel.appendChild(o);
-  }
-  /* Store ops data on window for chart builder to access */
-  window._opsDataCache = ops;
-}
+/* populateChartBuilderOpsMetrics merged into populateChartBuilderMetrics */
 
 /* === GENERATE === */
 async function generate() {
+  if (isEditMode) {
+    var body = document.getElementById('newsletterBody');
+    var choice = confirm('You have unsaved edits. Save them before generating?\n\nOK = save edits first\nCancel = discard edits and generate');
+    if (choice && body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); }
+    isEditMode = false;
+    if (body) { body.contentEditable = 'false'; body.style.outline = 'none'; body.style.cursor = 'default'; }
+    var eb = document.getElementById('editToggleBtn'); if (eb) eb.textContent = 'Edit';
+    var tb = document.getElementById('editToolbar');   if (tb) tb.classList.remove('visible');
+  }
   var btn = document.getElementById('generateBtn'); if (!btn) return;
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Fetching data...';
   showStatus('loading', 'Reading from Google Sheets...');
@@ -805,7 +836,6 @@ async function generate() {
       opsData = await fetchOpsData();
       if (opsData) {
         populateOpsFields(opsData);
-        populateChartBuilderOpsMetrics(opsData);
       }
     }
     var sel = document.getElementById('dateRangePreset'), preset = sel ? sel.value : '12';
@@ -827,7 +857,7 @@ async function generate() {
     autoSave(currentType, text);
     allCharts[currentType]      = extractCharts(text);
     selectedCharts[currentType] = allCharts[currentType].slice();
-    populateChartBuilderMetrics(sd);
+    populateChartBuilderMetrics(sd, opsData);
     isEditMode = false;
     var eb = document.getElementById('editToggleBtn'); if (eb) eb.textContent = 'Edit';
     var tb = document.getElementById('editToolbar');   if (tb) tb.classList.remove('visible');
@@ -885,7 +915,7 @@ function toggleEdit() {
   body.style.cursor    = isEditMode ? 'text' : 'default';
   if (btn) btn.textContent = isEditMode ? 'Done Editing' : 'Edit';
   if (tb) { if (isEditMode) tb.classList.add('visible'); else tb.classList.remove('visible'); }
-  if (isEditMode) { showStatus('loading', 'Edit mode on. Use toolbar for headers, drag images to insert.'); body.focus(); setupDragDrop(body); updateTOC(); }
+  if (isEditMode) { showStatus('loading', 'Edit mode on. Drag charts to reorder. Use toolbar for headers.'); body.focus(); setupDragDrop(body); setupAllChartDragging(); updateTOC(); }
   else { showStatus('success', 'Edits saved.'); newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); teardownDragDrop(body); }
 }
 
@@ -945,9 +975,14 @@ function applyChartSelection() {
   for (var i = 0; i < cbs.length; i++) {
     if (cbs[i].checked) { var idx = parseInt(cbs[i].getAttribute('data-chart-idx'), 10); if (charts[idx]) chosen.push(charts[idx]); }
   }
-  selectedCharts[currentType] = chosen.length ? chosen : charts;
+  selectedCharts[currentType] = chosen; /* allow empty - renderer handles gracefully */
   document.getElementById('chartPickerPanel').style.display = 'none';
-  if (newsletters[currentType]) { renderNewsletter(newsletters[currentType], selectedCharts[currentType]); showStatus('success', selectedCharts[currentType].length + ' charts displayed.'); }
+  /* Re-render: unchecked charts are removed from newsletter, not left as empty slots */
+  if (newsletters[currentType]) {
+    renderNewsletter(newsletters[currentType], selectedCharts[currentType]);
+    var msg = chosen.length ? chosen.length + ' chart' + (chosen.length > 1 ? 's' : '') + ' shown.' : 'All charts hidden.';
+    showStatus('success', msg);
+  }
 }
 
 /* === RENDER NEWSLETTER === */
@@ -991,9 +1026,15 @@ function renderNewsletter(text, charts) {
   body.innerHTML = html;
   body.contentEditable = isEditMode ? 'true' : 'false';
   body.style.outline   = isEditMode ? '2px solid var(--primary)' : 'none';
+  /* Save cursor position whenever user clicks in the newsletter body */
+  body.onmouseup = saveCursorPosition;
+  body.onkeyup   = saveCursorPosition;
   setTimeout(function() {
     updateTOC();
     for (var i = 0; i < charts.length; i++) { var c = document.getElementById('chart-inline-' + i); if (c) renderSingleChart(c, charts[i]); }
+    /* Set up drag on any already-inserted custom charts */
+    var draggables = body.querySelectorAll('.chart-draggable');
+    for (var d = 0; d < draggables.length; d++) setupChartDrag(draggables[d]);
   }, 60);
 }
 
@@ -1439,18 +1480,47 @@ var sheetDataCache = null; /* cached raw sheet data for chart builder */
 var customCharts   = [];   /* user-built charts */
 
 /* Populate the metric dropdown once sheet data is loaded */
-function populateChartBuilderMetrics(sheetData) {
+function populateChartBuilderMetrics(sheetData, opsData) {
   sheetDataCache = sheetData;
   var sel = document.getElementById('chartBuilderMetric');
   if (!sel) return;
   sel.innerHTML = '';
-  var opt = document.createElement('option');
-  opt.value = ''; opt.textContent = '— Choose a metric —'; sel.appendChild(opt);
+  /* Financial metrics */
+  var optHdr = document.createElement('option');
+  optHdr.disabled = true; optHdr.textContent = '── Financial Metrics ──'; sel.appendChild(optHdr);
   for (var j = 1; j < sheetData.hdr.length; j++) {
     var name = sheetData.hdr[j];
     if (!name || !name.trim()) continue;
     var o = document.createElement('option');
     o.value = String(j); o.textContent = name.trim(); sel.appendChild(o);
+  }
+  /* Operating metrics (if available) */
+  if (opsData && opsData.dataRows && opsData.dataRows.length) {
+    window._opsDataCache = opsData;
+    var divider = document.createElement('option');
+    divider.disabled = true; divider.textContent = '── Operating Metrics ──'; sel.appendChild(divider);
+    var m = opsData.idxMap;
+    var opsCols = [
+      { idx: m.gymActive,        name: 'Gym Active Members'          },
+      { idx: m.gymTrials,        name: 'Gym Trial Members'           },
+      { idx: m.gymHolds,         name: 'Gym Members on Hold'         },
+      { idx: m.gymNew,           name: 'Gym New Members'             },
+      { idx: m.gymChurned,       name: 'Gym Churned Members'         },
+      { idx: m.gymNetChange,     name: 'Gym Net Member Change'       },
+      { idx: m.gymTarget,        name: 'Gym Member Target'           },
+      { idx: m.coachingActive,   name: 'Coaching Active Clients'     },
+      { idx: m.coachingNew,      name: 'Coaching New Clients'        },
+      { idx: m.coachingChurned,  name: 'Coaching Churned Clients'    },
+      { idx: m.gymRevPerMember,  name: 'Gym Revenue per Member'      },
+      { idx: m.coachRevPerClient,name: 'Coaching Revenue per Client' }
+    ];
+    for (var k = 0; k < opsCols.length; k++) {
+      if (opsCols[k].idx < 0) continue;
+      var oo = document.createElement('option');
+      oo.value = 'ops:' + opsCols[k].idx;
+      oo.textContent = opsCols[k].name;
+      sel.appendChild(oo);
+    }
   }
 }
 
@@ -1459,8 +1529,10 @@ function buildCustomChart() {
   if (!sheetDataCache) { showStatus('error', 'Generate a newsletter first to load sheet data.'); return; }
   var sel    = document.getElementById('chartBuilderMetric');
   var ctype  = document.getElementById('chartBuilderType').value || 'line';
-  var startV = document.getElementById('chartBuilderStart').value;
-  var endV   = document.getElementById('chartBuilderEnd').value;
+  var sm = document.getElementById('chartBuilderStartMonth'), sy = document.getElementById('chartBuilderStartYear');
+  var em = document.getElementById('chartBuilderEndMonth'),   ey = document.getElementById('chartBuilderEndYear');
+  var startV = (sm && sy && sm.value && sy.value) ? sy.value + '-' + sm.value : '';
+  var endV   = (em && ey && em.value && ey.value) ? ey.value + '-' + em.value : '';
   var isOps   = sel.value && sel.value.indexOf('ops:') === 0;
   var colIdx  = isOps ? parseInt(sel.value.replace('ops:', ''), 10) : parseInt(sel.value, 10);
   if (!sel.value || isNaN(colIdx)) { showStatus('error', 'Select a metric first.'); return; }
@@ -1510,19 +1582,51 @@ function buildCustomChart() {
   showStatus('success', 'Chart added: ' + metricName + ' (' + rows.length + ' months).');
 }
 
+function getSectionOptions() {
+  /* Returns [{label, anchorId}] from current newsletter headings */
+  var body = document.getElementById('newsletterBody');
+  if (!body) return [];
+  var headings = body.querySelectorAll('h1, h2');
+  var opts = [{ label: 'Beginning of newsletter', anchorId: '__start__' }];
+  for (var i = 0; i < headings.length; i++) {
+    var id = headings[i].id || ('sec-' + i);
+    headings[i].id = id;
+    opts.push({ label: 'After: ' + headings[i].textContent.trim().slice(0, 50), anchorId: id });
+  }
+  opts.push({ label: 'End of newsletter', anchorId: '__end__' });
+  return opts;
+}
+
 function renderCustomChartsGrid() {
   var grid = document.getElementById('customChartsGrid');
   if (!grid) return;
   grid.innerHTML = '';
+  if (!customCharts.length) return;
+  var sections = getSectionOptions();
+  var note = document.createElement('div');
+  note.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:10px;padding:8px;background:var(--bg);border-radius:6px;';
+  note.innerHTML = '<strong>To insert:</strong> pick a section from the dropdown, click Insert. <strong>To reposition:</strong> switch to Newsletter tab, enter Edit mode, then drag any chart.';
+  grid.appendChild(note);
   for (var i = 0; i < customCharts.length; i++) {
     (function(chart, idx) {
+      /* Build section options HTML */
+      var optHtml = '';
+      for (var s = 0; s < sections.length; s++) {
+        optHtml += '<option value="' + sections[s].anchorId + '">' + sections[s].label + '</option>';
+      }
       var card = document.createElement('div'); card.className = 'chart-card';
       card.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
-        '<div class="chart-card-title">' + chart.title + '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div class="chart-card-title" style="font-size:13px;">' + chart.title + '</div>' +
         '<button onclick="removeCustomChart(' + idx + ')" style="border:none;background:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0;">&#10005;</button>' +
         '</div>' +
-        '<canvas id="custom-chart-' + idx + '" height="220"></canvas>';
+        '<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">' +
+        '<select id="chart-section-' + idx + '" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--text);background:var(--bg);">' +
+        optHtml +
+        '</select>' +
+        '<button onclick="insertChartAtSection(' + idx + ')" style="padding:5px 12px;background:var(--primary);color:white;border:none;border-radius:5px;font-size:11px;cursor:pointer;font-weight:700;white-space:nowrap;">Insert →</button>' +
+        '</div>' +
+        '<canvas id="custom-chart-' + idx + '" height="200"></canvas>';
       grid.appendChild(card);
       setTimeout(function() { var c = document.getElementById('custom-chart-' + idx); if (c) renderSingleChart(c, chart); }, 60);
     })(customCharts[i], i);
@@ -1532,6 +1636,207 @@ function renderCustomChartsGrid() {
 function removeCustomChart(idx) {
   customCharts.splice(idx, 1);
   renderCustomChartsGrid();
+}
+
+
+/* === INSERT CUSTOM CHART INTO NEWSLETTER === */
+
+function buildChartWrapper(chart) {
+  var uid = 'inserted-chart-' + Date.now();
+  var wrapper = document.createElement('div');
+  wrapper.className = 'chart-embed chart-draggable';
+  wrapper.setAttribute('draggable', 'true');
+  wrapper.setAttribute('contenteditable', 'false');
+  wrapper.style.cssText = 'margin:24px 0;cursor:grab;position:relative;';
+  wrapper.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+    '<div class="chart-embed-title" style="flex:1;">' + chart.title + '</div>' +
+    '<span style="font-size:11px;color:var(--muted);user-select:none;" title="Drag to reposition">&#8597; drag</span>' +
+    '</div>' +
+    '<canvas id="' + uid + '" height="180"></canvas>';
+  wrapper._chartDef = chart;
+  wrapper._canvasId = uid;
+  return wrapper;
+}
+
+function insertChartAtSection(idx) {
+  var chart = customCharts[idx];
+  if (!chart) return;
+  var body = document.getElementById('newsletterBody');
+  if (!body) { showStatus('error', 'Generate a newsletter first.'); return; }
+
+  var sel = document.getElementById('chart-section-' + idx);
+  var anchorId = sel ? sel.value : '__end__';
+
+  var wrapper = buildChartWrapper(chart);
+
+  if (anchorId === '__start__') {
+    body.insertBefore(wrapper, body.firstChild);
+  } else if (anchorId === '__end__') {
+    body.appendChild(wrapper);
+  } else {
+    var anchor = document.getElementById(anchorId);
+    if (anchor) {
+      /* Insert after the section heading and its immediately following paragraph */
+      var insertAfter = anchor;
+      var next = anchor.nextSibling;
+      /* Skip one paragraph after the heading if present */
+      if (next && next.nodeName === 'P') insertAfter = next;
+      if (insertAfter.nextSibling) {
+        body.insertBefore(wrapper, insertAfter.nextSibling);
+      } else {
+        body.appendChild(wrapper);
+      }
+    } else {
+      body.appendChild(wrapper);
+    }
+  }
+
+  setTimeout(function() {
+    var c = document.getElementById(wrapper._canvasId);
+    if (c) renderSingleChart(c, chart);
+    setupChartDrag(wrapper);
+  }, 60);
+
+  /* Switch to newsletter tab to show result */
+  switchTab('newsletter', document.querySelector('.tab'));
+
+  /* Auto-save the insertion */
+  newsletters[currentType] = body.innerHTML;
+  autoSave(currentType, body.innerHTML);
+
+  showStatus('success', 'Chart inserted. Enter Edit mode to drag it to a different position.');
+}
+
+/* === TOGGLE PANELS === */
+function toggleChartPicker() {
+  var panel = document.getElementById('chartPickerPanel');
+  var btn   = document.getElementById('chartPickerBtn');
+  var isOpen = panel && panel.style.display !== 'none';
+  if (panel) panel.style.display = isOpen ? 'none' : 'block';
+  if (btn)   btn.classList.toggle('active', !isOpen);
+  if (!isOpen) {
+    var charts = allCharts[currentType] || [];
+    if (!charts.length) { showStatus('error', 'Generate a newsletter first.'); panel.style.display = 'none'; btn.classList.remove('active'); return; }
+    showChartPickerContent();
+  }
+}
+function toggleSavesPanel() {
+  var panel = document.getElementById('savesPanel');
+  var btn   = document.getElementById('savesPanelBtn');
+  var isOpen = panel && panel.style.display !== 'none';
+  if (panel) panel.style.display = isOpen ? 'none' : 'block';
+  if (btn)   btn.classList.toggle('active', !isOpen);
+  if (!isOpen) refreshSavesPanel();
+}
+/* Keep old showSavesPanel as alias */
+function showSavesPanel() { toggleSavesPanel(); }
+/* Keep old showChartPicker as alias */
+function showChartPicker() { toggleChartPicker(); }
+function showChartPickerContent() {
+  var panel = document.getElementById('chartPickerPanel'), list = document.getElementById('chartPickerList');
+  var charts = allCharts[currentType] || [];
+  if (!panel || !list) return;
+  var sel = selectedCharts[currentType] || [], html = '';
+  for (var i = 0; i < charts.length; i++) {
+    var chk = sel.indexOf(charts[i]) >= 0 ? 'checked' : '';
+    html += '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border);">' +
+            '<input type="checkbox" data-chart-idx="' + i + '" ' + chk + ' style="width:16px;height:16px;cursor:pointer;margin-top:2px;">' +
+            '<div><div style="font-weight:600;">' + (charts[i].title || 'Chart ' + (i+1)) + '</div>' +
+            '<div style="font-size:11px;color:var(--muted);">' + (charts[i].type || 'bar') + ' chart</div></div></label>';
+  }
+  list.innerHTML = html;
+}
+
+
+/* === CHART DRAG-TO-REPOSITION (Edit mode) === */
+
+var _dragSrc = null;
+
+function setupChartDrag(wrapper) {
+  wrapper.setAttribute('draggable', 'true');
+  wrapper.addEventListener('dragstart', function(e) {
+    _dragSrc = wrapper;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', ''); /* required for Firefox */
+    wrapper.style.opacity = '0.45';
+  });
+  wrapper.addEventListener('dragend', function() {
+    wrapper.style.opacity = '1';
+    _dragSrc = null;
+    /* Re-render canvas after drop (canvas doesn't survive innerHTML moves) */
+    setTimeout(function() {
+      if (wrapper._chartDef && wrapper._canvasId) {
+        var c = document.getElementById(wrapper._canvasId);
+        if (c) renderSingleChart(c, wrapper._chartDef);
+      }
+    }, 80);
+  });
+}
+
+function setupAllChartDragging() {
+  var body = document.getElementById('newsletterBody');
+  if (!body) return;
+
+  /* Make all chart-draggable wrappers draggable */
+  var wrappers = body.querySelectorAll('.chart-draggable');
+  for (var i = 0; i < wrappers.length; i++) setupChartDrag(wrappers[i]);
+
+  /* Newsletter body is the drop target */
+  body.addEventListener('dragover', function(e) {
+    if (!_dragSrc) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    /* Highlight nearest drop zone */
+    var target = getDropTarget(e.clientY);
+    clearDropHighlights(body);
+    if (target) target.classList.add('drop-target-highlight');
+  });
+
+  body.addEventListener('dragleave', function() {
+    clearDropHighlights(body);
+  });
+
+  body.addEventListener('drop', function(e) {
+    e.preventDefault();
+    clearDropHighlights(body);
+    if (!_dragSrc) return;
+    var target = getDropTarget(e.clientY);
+    if (target && target !== _dragSrc) {
+      /* Insert before the target element */
+      body.insertBefore(_dragSrc, target);
+    } else if (!target) {
+      body.appendChild(_dragSrc);
+    }
+    /* Re-render chart canvas */
+    setTimeout(function() {
+      if (_dragSrc && _dragSrc._chartDef && _dragSrc._canvasId) {
+        var c = document.getElementById(_dragSrc._canvasId);
+        if (c) renderSingleChart(c, _dragSrc._chartDef);
+      }
+      /* Save after reorder */
+      newsletters[currentType] = body.innerHTML;
+      autoSave(currentType, body.innerHTML);
+      _dragSrc = null;
+    }, 80);
+  });
+}
+
+function getDropTarget(clientY) {
+  var body = document.getElementById('newsletterBody');
+  if (!body) return null;
+  var children = body.children;
+  for (var i = 0; i < children.length; i++) {
+    var rect = children[i].getBoundingClientRect();
+    var midY = rect.top + rect.height / 2;
+    if (clientY < midY) return children[i];
+  }
+  return null;
+}
+
+function clearDropHighlights(body) {
+  var els = body.querySelectorAll('.drop-target-highlight');
+  for (var i = 0; i < els.length; i++) els[i].classList.remove('drop-target-highlight');
 }
 
 </script>
