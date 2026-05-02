@@ -59,7 +59,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: var(--font-ui); background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
     header { background: var(--header-bg); color: var(--header-text); padding: 0 28px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.25); transition: background 0.3s; }
-    .logo-sh { height: 26px; object-fit: contain; display: block; filter: brightness(0) invert(1); }
+    .logo-sh { height: 32px; object-fit: contain; display: block; mix-blend-mode: screen; }
     .logo-p3 { height: 28px; object-fit: contain; display: none; }
     [data-brand="proof3"] .logo-sh { display: none; }
     [data-brand="proof3"] .logo-p3 { display: block; }
@@ -321,12 +321,48 @@
       </div>
     </div>
     <div id="chartsTab" style="display:none">
+      <!-- Manual chart builder -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;max-width:720px;margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px;">Build a Chart from Sheet Data</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">Metric</label>
+            <select id="chartBuilderMetric" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);">
+              <option value="">— Select after generating —</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">Chart Type</label>
+            <select id="chartBuilderType" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);">
+              <option value="bar">Bar</option>
+              <option value="line">Line</option>
+              <option value="area">Area</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;">
+          <div>
+            <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">Start Month</label>
+            <input type="month" id="chartBuilderStart" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);">
+          </div>
+          <div>
+            <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">End Month</label>
+            <input type="month" id="chartBuilderEnd" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);">
+          </div>
+          <button onclick="buildCustomChart()" style="padding:7px 16px;background:var(--primary);color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Add Chart</button>
+        </div>
+      </div>
+      <!-- Generated + custom charts grid -->
       <div class="charts-grid" id="chartsGrid"></div>
+      <div class="charts-grid" id="customChartsGrid" style="margin-top:14px;"></div>
     </div>
   </main>
 </div>
 
 <script>
+
+
+
 
 
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
@@ -338,6 +374,7 @@ var SHEET_CONFIGS = {
   all:   { sheetId: DATA_SHEET_ID, gid: '0',          label: 'All Entities',  tabName: 'r/u - All Entities',    brand: 'sagehouse' },
   p3spv: { sheetId: DATA_SHEET_ID, gid: '1633984252', label: 'proof3 + SPV1', tabName: 'r/u - p3 w/ SHC SPV1', brand: 'proof3'    }
 };
+var OPS_SHEET_GID = '1549504871';  /* p3g1 - Operating Metrics tab */
 
 var OG_IMAGES = {
   sagehouse: 'https://jim-proof3.github.io/tsh-newsletter/sh-logo.png',
@@ -350,7 +387,10 @@ var CONTEXT_FIELDS = {
     { id:'focusItems',   label:'What Jim Is Focused On',   type:'textarea', rows:2, placeholder:'e.g. Closing gym 2 lease, hitting 95 members.' }
   ],
   sagehouse: [
-    { id:'portfolioUpdates', label:'Portfolio Company Updates', type:'textarea', rows:2, placeholder:'e.g. SIQ Basketball strong holiday season. Elo Health Series A track.' }
+    { id:'portfolioUpdates', label:'Portfolio Company Updates', type:'textarea', rows:2, placeholder:'e.g. SIQ Basketball strong holiday season. Elo Health Series A track.' },
+    { id:'financialHighlights', label:'Financial Highlights', type:'textarea', rows:2, placeholder:'e.g. Advisory revenue hit $161k, gym burn running $45k/mo, total group cash $244k.' },
+    { id:'tshHighlights', label:'TSH-Specific Highlights (SHA, SHC, TSH)', type:'textarea', rows:2, placeholder:'e.g. SHA margins expanded, new advisory client onboarded, SHC clean balance sheet.' },
+    { id:'p3Highlights', label:'proof3-Specific Highlights', type:'textarea', rows:2, placeholder:'e.g. Gym at 91 members, coaching revenue up, second location lease in negotiation.' }
   ],
   proof3gym: [
     { id:'membersNow',      label:'Members This Month', type:'number', placeholder:'86'  },
@@ -487,8 +527,13 @@ function buildContext() {
            trials:getVal('trialsNow'), holds:getVal('holdsNow'), newMembers:getVal('newMembers'),
            churned:getVal('churnedMembers'), target:getVal('memberTarget'), memberStory:getVal('memberStory') },
     coaching:  { clients: getVal('coachingClients') },
-    portfolio: getVal('portfolioUpdates'), debt: getVal('debtContext'),
-    unusual:   getVal('unusualItems'),     focus: getVal('focusItems')
+    portfolio:           getVal('portfolioUpdates'),
+    financialHighlights: getVal('financialHighlights'),
+    tshHighlights:       getVal('tshHighlights'),
+    p3Highlights:        getVal('p3Highlights'),
+    debt:                getVal('debtContext'),
+    unusual:             getVal('unusualItems'),
+    focus:               getVal('focusItems')
   };
 }
 
@@ -566,10 +611,15 @@ function fmtVal(v) {
 
 function rowsToTable(rows, hdr) {
   if (!rows || !rows.length) return 'No data.\n';
-  var t = 'Date\t' + hdr.slice(1, 30).join('\t') + '\n----\n';
+  /* Send all columns - sheet has ~37 meaningful metrics */
+  var maxCols = Math.min(hdr.length, 60);
+  var hdrs = hdr.slice(1, maxCols).filter(function(h) { return h && h.trim(); });
+  var t = 'Date\t' + hdrs.join('\t') + '\n----\n';
   for (var i = 0; i < rows.length; i++) {
-    var v = [];
-    for (var j = 0; j < Math.min(rows[i].length, 30); j++) v.push(fmtVal(rows[i][j]));
+    var v = [fmtVal(rows[i][0])]; /* date */
+    for (var j = 1; j < maxCols && j < rows[i].length; j++) {
+      if (hdr[j] && hdr[j].trim()) v.push(fmtVal(rows[i][j]));
+    }
     t += v.join('\t') + '\n';
   }
   return t;
@@ -597,6 +647,151 @@ async function fetchSheetData(type) {
            rowCount:allRows.length, earliestDate:allRows[0][0], latestDate:allRows[allRows.length-1][0] };
 }
 
+/* === OPERATING METRICS FETCH === */
+async function fetchOpsData() {
+  var url = 'https://docs.google.com/spreadsheets/d/' + DATA_SHEET_ID + '/export?format=csv&gid=' + OPS_SHEET_GID;
+  try {
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('Ops sheet HTTP ' + resp.status);
+    var csv  = await resp.text();
+    var lines = csv.split('\n').filter(function(l) { return l.trim(); });
+    if (lines.length < 2) return null;
+    var rows = lines.map(parseCsvLine);
+    /* Row 0 = headers */
+    var hdr  = rows[0];
+    /* Find column indices by header name */
+    function col(name) {
+      for (var i = 0; i < hdr.length; i++) {
+        if (hdr[i] && hdr[i].trim().toLowerCase() === name.toLowerCase()) return i;
+      }
+      return -1;
+    }
+    var idxMap = {
+      date:           col('Date'),
+      gymActive:      col('Gym Active Members'),
+      gymTrials:      col('Gym Trial Members'),
+      gymHolds:       col('Gym Members on Hold'),
+      gymNew:         col('Gym New Members'),
+      gymChurned:     col('Gym Churned Members'),
+      gymNetChange:   col('Gym Net Member Change'),
+      gymTarget:      col('Gym Member Target'),
+      coachingActive: col('Coaching Active Clients'),
+      coachingNew:    col('Coaching New Clients'),
+      coachingChurned:col('Coaching Churned Clients'),
+      gymRevPerMember:col('Gym Revenue per Member'),
+      coachRevPerClient:col('Coaching Revenue per Client')
+    };
+    /* Find last row that has gym active members data */
+    var latestRow = null;
+    for (var i = rows.length - 1; i >= 1; i--) {
+      var v = idxMap.gymActive >= 0 ? rows[i][idxMap.gymActive] : '';
+      if (v && v.trim() && v.trim() !== '0') { latestRow = rows[i]; break; }
+    }
+    /* Build all rows with data for historical ops context */
+    var dataRows = [];
+    for (var i = 1; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r[0] || !r[0].trim()) continue;
+      var activeVal = idxMap.gymActive >= 0 ? (r[idxMap.gymActive] || '').trim() : '';
+      if (!activeVal || activeVal === '0') continue;
+      dataRows.push(r);
+    }
+    return { hdr: hdr, idxMap: idxMap, latestRow: latestRow, dataRows: dataRows, allRows: rows.slice(1) };
+  } catch(e) {
+    console.warn('fetchOpsData error:', e);
+    return null;
+  }
+}
+
+/* Auto-populate context fields from latest ops row */
+function populateOpsFields(ops) {
+  if (!ops || !ops.latestRow) return;
+  var r = ops.latestRow, m = ops.idxMap;
+  function setField(id, colIdx) {
+    if (colIdx < 0) return;
+    var val = (r[colIdx] || '').trim().replace(/[$,%]/g, '');
+    if (!val || val === '0') return;
+    var el = document.getElementById(id);
+    if (el && !el.value) el.value = val;  /* only set if empty - don't overwrite user input */
+  }
+  setField('membersNow',      m.gymActive);
+  setField('trialsNow',       m.gymTrials);
+  setField('holdsNow',        m.gymHolds);
+  setField('newMembers',      m.gymNew);
+  setField('churnedMembers',  m.gymChurned);
+  setField('memberTarget',    m.gymTarget);
+  setField('coachingClients', m.coachingActive);
+  /* Compute prior month members if we have 2+ rows with data */
+  if (m.gymActive >= 0 && ops.dataRows.length >= 2) {
+    var priorRow = ops.dataRows[ops.dataRows.length - 2];
+    var priorVal = (priorRow[m.gymActive] || '').trim().replace(/[$,%]/g, '');
+    if (priorVal && priorVal !== '0') {
+      var priorEl = document.getElementById('membersPrior');
+      if (priorEl && !priorEl.value) priorEl.value = priorVal;
+    }
+  }
+}
+
+/* Build ops context string for Claude prompt */
+function buildOpsContext(ops) {
+  if (!ops || !ops.dataRows || !ops.dataRows.length) return '';
+  var m = ops.idxMap, lines = [];
+  lines.push('proof3 Gym 1 + Coaching - Monthly Operating Metrics:');
+  lines.push('Date\tActive Members\tTrials\tHolds\tNew\tChurned\tNet Change\tTarget\tCoaching Clients\tNew Coaching\tChurned Coaching');
+  for (var i = 0; i < ops.dataRows.length; i++) {
+    var r = ops.dataRows[i];
+    var row = [
+      r[m.date]            || '',
+      m.gymActive      >= 0 ? r[m.gymActive]       || '' : '',
+      m.gymTrials      >= 0 ? r[m.gymTrials]        || '' : '',
+      m.gymHolds       >= 0 ? r[m.gymHolds]         || '' : '',
+      m.gymNew         >= 0 ? r[m.gymNew]            || '' : '',
+      m.gymChurned     >= 0 ? r[m.gymChurned]        || '' : '',
+      m.gymNetChange   >= 0 ? r[m.gymNetChange]      || '' : '',
+      m.gymTarget      >= 0 ? r[m.gymTarget]         || '' : '',
+      m.coachingActive >= 0 ? r[m.coachingActive]    || '' : '',
+      m.coachingNew    >= 0 ? r[m.coachingNew]       || '' : '',
+      m.coachingChurned>= 0 ? r[m.coachingChurned]   || '' : ''
+    ];
+    lines.push(row.join('\t'));
+  }
+  return lines.join('\n');
+}
+
+/* Add ops metrics to chart builder dropdown */
+function populateChartBuilderOpsMetrics(ops) {
+  if (!ops || !ops.dataRows || !ops.dataRows.length) return;
+  var sel = document.getElementById('chartBuilderMetric');
+  if (!sel) return;
+  var divider = document.createElement('option');
+  divider.disabled = true; divider.textContent = '── Operating Metrics ──';
+  sel.appendChild(divider);
+  var m = ops.idxMap;
+  var opsColNames = [
+    { idx: m.gymActive,       name: 'Gym Active Members'        },
+    { idx: m.gymTrials,       name: 'Gym Trial Members'         },
+    { idx: m.gymHolds,        name: 'Gym Members on Hold'       },
+    { idx: m.gymNew,          name: 'Gym New Members'           },
+    { idx: m.gymChurned,      name: 'Gym Churned Members'       },
+    { idx: m.gymNetChange,    name: 'Gym Net Member Change'     },
+    { idx: m.gymTarget,       name: 'Gym Member Target'         },
+    { idx: m.coachingActive,  name: 'Coaching Active Clients'   },
+    { idx: m.coachingNew,     name: 'Coaching New Clients'      },
+    { idx: m.coachingChurned, name: 'Coaching Churned Clients'  },
+    { idx: m.gymRevPerMember, name: 'Gym Revenue per Member'    },
+    { idx: m.coachRevPerClient, name: 'Coaching Revenue per Client' }
+  ];
+  for (var i = 0; i < opsColNames.length; i++) {
+    if (opsColNames[i].idx < 0) continue;
+    var o = document.createElement('option');
+    o.value    = 'ops:' + opsColNames[i].idx;
+    o.textContent = opsColNames[i].name;
+    sel.appendChild(o);
+  }
+  /* Store ops data on window for chart builder to access */
+  window._opsDataCache = ops;
+}
+
 /* === GENERATE === */
 async function generate() {
   var btn = document.getElementById('generateBtn'); if (!btn) return;
@@ -604,12 +799,21 @@ async function generate() {
   showStatus('loading', 'Reading from Google Sheets...');
   try {
     var sd = await fetchSheetData(currentType);
+    /* Fetch operating metrics for p3spv type (and all entities if relevant) */
+    var opsData = null;
+    if (currentType === 'p3spv' || currentType === 'all') {
+      opsData = await fetchOpsData();
+      if (opsData) {
+        populateOpsFields(opsData);
+        populateChartBuilderOpsMetrics(opsData);
+      }
+    }
     var sel = document.getElementById('dateRangePreset'), preset = sel ? sel.value : '12';
     var fRows = getFilteredRows(sd.allRows), fTable = rowsToTable(fRows, sd.hdr);
     var fLabel = getRangeLabel(preset, sd.earliestDate, sd.latestDate);
     showStatus('loading', 'Loaded ' + sd.rowCount + ' months. Calling Claude...');
     btn.innerHTML = '<span class="spinner"></span>Writing newsletter...';
-    var ctx = buildContext(), prompts = buildPrompts(currentType, sd, fTable, fLabel, ctx);
+    var ctx = buildContext(), prompts = buildPrompts(currentType, sd, fTable, fLabel, ctx, opsData);
     var resp = await fetch(WORKER_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ system: prompts.system, messages: [{ role: 'user', content: prompts.user }] })
@@ -623,6 +827,7 @@ async function generate() {
     autoSave(currentType, text);
     allCharts[currentType]      = extractCharts(text);
     selectedCharts[currentType] = allCharts[currentType].slice();
+    populateChartBuilderMetrics(sd);
     isEditMode = false;
     var eb = document.getElementById('editToggleBtn'); if (eb) eb.textContent = 'Edit';
     var tb = document.getElementById('editToolbar');   if (tb) tb.classList.remove('visible');
@@ -942,7 +1147,7 @@ function copyNewsletter()  { var t = getExportText(); if (!t) { showStatus('erro
 function exportToDoc()     { var t = getExportText(); if (!t) { showStatus('error','Nothing to export.'); return; } navigator.clipboard.writeText(t).then(function() { showStatus('success','Copied. Opening Google Docs.'); setTimeout(function() { window.open('https://docs.google.com/document/create','_blank'); }, 800); }).catch(function() { showStatus('error','Copy failed.'); }); }
 
 /* === PROMPT BUILDER === */
-function buildPrompts(type, sd, filteredTable, rangeLabel, ctx) {
+function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData) {
   var cfg = SHEET_CONFIGS[type];
   var co  = CHART_OPEN, fc = FENCE_CLOSE;
   var audienceMap = {
@@ -959,37 +1164,62 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx) {
     if (g.churned)    lines.push('  Churned: '   + g.churned);
     if (g.target)     lines.push('  Target: '    + g.target);
   }
-  if (g.memberStory)         lines.push('\nMember story:\n' + g.memberStory);
-  if (ctx.coaching.clients)  lines.push('\nCoaching clients: ' + ctx.coaching.clients);
-  if (ctx.portfolio)         lines.push('\nPortfolio:\n' + ctx.portfolio);
-  if (ctx.debt)              lines.push('\nDebt:\n' + ctx.debt);
-  if (ctx.unusual)           lines.push('\nUnusual:\n' + ctx.unusual);
-  if (ctx.focus)             lines.push('\nFocused on:\n' + ctx.focus);
+  if (g.memberStory)                lines.push('\nMember story:\n' + g.memberStory);
+  if (ctx.coaching.clients)         lines.push('\nCoaching clients: ' + ctx.coaching.clients);
+  if (ctx.portfolio)                lines.push('\nPortfolio company updates:\n' + ctx.portfolio);
+  if (ctx.financialHighlights)      lines.push('\nFinancial highlights (use these to frame the numbers):\n' + ctx.financialHighlights);
+  if (ctx.tshHighlights)            lines.push('\nTSH-specific highlights (TSH LLC, SHA, SHC):\n' + ctx.tshHighlights);
+  if (ctx.p3Highlights)             lines.push('\nproof3-specific highlights (Training, Coaching, Gym 1):\n' + ctx.p3Highlights);
+  if (ctx.debt)                     lines.push('\nDebt/note structure:\n' + ctx.debt);
+  if (ctx.unusual)                  lines.push('\nUnusual items (explain these in the newsletter):\n' + ctx.unusual);
+  if (ctx.focus)                    lines.push('\nJim is focused on:\n' + ctx.focus);
   var opCtx = lines.join('\n');
   var isP3 = type === 'p3spv';
   var cc = isP3 ? '"#3d9cb5" primary, "#a8d4e0" secondary' : '"#13474A" primary, "#F1CC6C" secondary';
   var ex = co + '\n{"type":"bar","title":"Monthly Revenue","data":[{"date":"Jan 25","value":45000}],"series":[{"key":"value","name":"Revenue","color":"#13474A"}]}\n' + fc;
   var system =
     'You generate monthly investor newsletters for The SageHouse.\n\n' +
-    'ENTITIES: TSH owns SHC (holding, no revenue) and SHA (advisory revenue). SHC owns SPV1, which owns proof3 Training Inc ' +
-    '(owns proof3 Coaching LLC and proof3 Gym 1 Phoenix LLC, Salt River AZ, opened Jan 2025, breakeven ~100-110 members). ' +
-    'proof3 Coaching is profitable. TSH holds minority positions in fitness/health/wellness tech.\n\n' +
+    'ENTITIES:\n' +
+    'TSH (The SageHouse LLC) is the top-level holding company. It owns:\n' +
+    '- SHA (SageHouse Advisors LLC): generates advisory/consulting revenue. This is the primary revenue driver for the TSH group.\n' +
+    '- SHC (SageHouse Capital LLC): pure holding company, zero operating revenue of its own.\n' +
+    'SHC owns SPV1 (SageHouse Capital SPV1 LLC), which owns proof3 Training Inc.\n' +
+    'proof3 Training Inc owns proof3 Coaching LLC (online coaching, profitable) and proof3 Gym 1 Phoenix LLC (Salt River AZ, opened Jan 2025, breakeven ~100-110 members).\n' +
+    'TSH also holds minority equity positions in early-stage fitness/health/wellness tech companies.\n\n' +
     'AUDIENCE: ' + (audienceMap[type] || audienceMap.all) + '\n\n' +
-    'VOICE (write as Jim): Direct, honest, first person. "I" for opinions, "we" for team. ' +
-    'Never defensive. Share bad news clearly. No corporate language. No formal sign-off. ' +
-    'Never name team members unless given. Never fabricate.\n\n' +
-    'FORMAT: 600-700 words prose. No bullets. Exactly 4 chart JSON blocks with descriptive titles. ' +
-    '1-2 sentence so-what before each. 2-3 sentence personal close.\n\n' +
-    'CHART RULES: Only use data in tables. x-axis key = "date". Types: bar/line/area. Colors: ' + cc + '. Negative: "#C0392B". Each chart MUST have a descriptive "title".\n' +
+    'VOICE (write as Jim): Direct, honest, first person. "I" for opinions and decisions, "we" for team actions. ' +
+    'Never defensive. Share bad news as clearly as good. No corporate language. No formal sign-off. ' +
+    'Never mention team member names unless explicitly given in context. Never fabricate data.\n\n' +
+    'DATA ACCURACY RULES - CRITICAL:\n' +
+    '- Only state facts explicitly present in the financial data tables. Never infer, estimate, or fill in gaps.\n' +
+    '- Never state gym member counts unless explicitly provided in the context section below. The financial tables do not contain member counts.\n' +
+    '- When describing revenue, state the TOTAL INCOME across all entities, then break down by entity if relevant.\n' +
+    '- When describing direction of change (up/down/dropped/grew), double-check: if the newer value is higher, it grew. If lower, it dropped.\n' +
+    '- Expenses are always positive numbers. Net Operating Income can be positive or negative. Never confuse them in charts or text.\n' +
+    '- If a value is zero or missing for early months (before an entity existed), acknowledge the entity was not yet operating.\n\n' +
+    'FORMAT: 600-700 words prose. No bullet lists. Exactly 4 chart JSON blocks with descriptive titles. ' +
+    '1-2 sentences before each chart explaining the so-what (not what the chart shows). Personal 2-3 sentence close.\n\n' +
+    'CHART RULES - CRITICAL:\n' +
+    '- Only use data explicitly in the tables. x-axis key must be "date". Allowed types: bar, line, area.\n' +
+    '- Colors: ' + cc + '. For mostly-negative series use "#C0392B".\n' +
+    '- NEVER mix positive metrics (like Total Expenses) with negative metrics (like Net Operating Income) in the same bar chart. They will render as overlapping bars that confuse readers. Put them in separate charts or use a line chart instead.\n' +
+    '- Each chart MUST have a descriptive title field.\n' +
+    '- For all-time trend charts, use all the data rows provided. Do not truncate to 12 months unless showing a recent trend specifically.\n' +
     ex + '\n\n' +
-    'DATA: ' + sd.tabName + ' | ' + sd.rowCount + ' months | ' + sd.earliestDate + ' to ' + sd.latestDate + '\n' +
-    'Intercompany eliminations applied.\n';
+    'DATA: ' + sd.tabName + ' | ' + sd.rowCount + ' months available | ' + sd.earliestDate + ' to ' + sd.latestDate + '\n' +
+    'Intercompany eliminations already applied where relevant.\n';
   var user =
     'Generate the ' + cfg.label + ' investor newsletter.\n\n' +
-    'FILTERED DATA (' + rangeLabel + '):\n' + filteredTable + '\n\n' +
-    'ALL-TIME DATA:\n' + sd.allTime + '\n\n' +
-    (opCtx ? 'CONTEXT THIS MONTH:\n' + opCtx + '\n\n' : '') +
-    '4 chart JSON blocks with descriptive titles. Under 700 words. Write in Jim\'s voice.';
+    'FINANCIAL DATA (' + rangeLabel + ' — use this as the primary data source):\n' + filteredTable + '\n\n' +
+    (sd.allTime !== filteredTable ? 'ALL-TIME DATA (use for inception-to-date trend charts only — do not default to this for recent analysis):\n' + sd.allTime + '\n\n' : '') +
+    (opCtx ? 'CONTEXT THIS MONTH (treat this as ground truth — do not contradict it with data):\n' + opCtx + '\n\n' : 'No additional context provided.\n\n') +
+    (opsData ? 'OPERATING METRICS (all available months — use for member/coaching trends and current month counts):\n' + buildOpsContext(opsData) + '\n\n' : '') +
+    'INSTRUCTIONS: Write the ' + cfg.label + ' newsletter. ' +
+    'Use the financial data above. ' +
+    'Include exactly 4 chart JSON blocks. ' +
+    'Keep prose under 700 words. ' +
+    'Write entirely in Jim\'s voice. ' +
+    'Do not state any gym member numbers unless they appear in the context section above.';
   return { system: system, user: user };
 }
 
@@ -1200,6 +1430,110 @@ async function loadCloudSave(id, type) {
     showStatus('error', 'Load failed: ' + err.message + '. Link may have expired (90 day limit).');
   }
 }
+
+
+
+/* === MANUAL CHART BUILDER === */
+
+var sheetDataCache = null; /* cached raw sheet data for chart builder */
+var customCharts   = [];   /* user-built charts */
+
+/* Populate the metric dropdown once sheet data is loaded */
+function populateChartBuilderMetrics(sheetData) {
+  sheetDataCache = sheetData;
+  var sel = document.getElementById('chartBuilderMetric');
+  if (!sel) return;
+  sel.innerHTML = '';
+  var opt = document.createElement('option');
+  opt.value = ''; opt.textContent = '— Choose a metric —'; sel.appendChild(opt);
+  for (var j = 1; j < sheetData.hdr.length; j++) {
+    var name = sheetData.hdr[j];
+    if (!name || !name.trim()) continue;
+    var o = document.createElement('option');
+    o.value = String(j); o.textContent = name.trim(); sel.appendChild(o);
+  }
+}
+
+/* Build a chart from the selected metric + date range */
+function buildCustomChart() {
+  if (!sheetDataCache) { showStatus('error', 'Generate a newsletter first to load sheet data.'); return; }
+  var sel    = document.getElementById('chartBuilderMetric');
+  var ctype  = document.getElementById('chartBuilderType').value || 'line';
+  var startV = document.getElementById('chartBuilderStart').value;
+  var endV   = document.getElementById('chartBuilderEnd').value;
+  var isOps   = sel.value && sel.value.indexOf('ops:') === 0;
+  var colIdx  = isOps ? parseInt(sel.value.replace('ops:', ''), 10) : parseInt(sel.value, 10);
+  if (!sel.value || isNaN(colIdx)) { showStatus('error', 'Select a metric first.'); return; }
+  var metricName = isOps
+    ? (window._opsDataCache ? (window._opsDataCache.hdr[colIdx] || 'Metric') : 'Metric')
+    : (sheetDataCache ? sheetDataCache.hdr[colIdx] || 'Metric' : 'Metric');
+
+  /* Filter rows by date range */
+  var sourceRows = isOps
+    ? (window._opsDataCache ? window._opsDataCache.dataRows : [])
+    : (sheetDataCache ? sheetDataCache.allRows : []);
+  if (!sourceRows.length) { showStatus('error', isOps ? 'No operating metrics loaded yet.' : 'Generate a newsletter first.'); return; }
+  var rows = sourceRows;
+  if (startV || endV) {
+    var sd = startV ? new Date(startV + '-01') : null;
+    var ed = endV   ? new Date(endV   + '-01') : null;
+    rows = rows.filter(function(row) {
+      var d = parseRowDate(row[0]);
+      if (!d) return false;
+      if (sd && d < sd) return false;
+      if (ed && d > ed) return false;
+      return true;
+    });
+  }
+  if (!rows.length) { showStatus('error', 'No data in selected date range.'); return; }
+
+  /* Build chart data */
+  var colors = getColors();
+  var data = rows.map(function(row) {
+    var rawDate = row[0] || '';
+    var d = parseRowDate(rawDate);
+    var label = d ? (['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + String(d.getFullYear()).slice(2)) : rawDate;
+    var val = parseFloat(String(row[colIdx] || '').replace(/[$,%]/g, '')) || 0;
+    return { date: label, value: val };
+  });
+
+  var chartDef = {
+    type:   ctype,
+    title:  metricName,
+    data:   data,
+    series: [{ key: 'value', name: metricName, color: colors.primary }],
+    custom: true
+  };
+
+  customCharts.push(chartDef);
+  renderCustomChartsGrid();
+  showStatus('success', 'Chart added: ' + metricName + ' (' + rows.length + ' months).');
+}
+
+function renderCustomChartsGrid() {
+  var grid = document.getElementById('customChartsGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (var i = 0; i < customCharts.length; i++) {
+    (function(chart, idx) {
+      var card = document.createElement('div'); card.className = 'chart-card';
+      card.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+        '<div class="chart-card-title">' + chart.title + '</div>' +
+        '<button onclick="removeCustomChart(' + idx + ')" style="border:none;background:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0;">&#10005;</button>' +
+        '</div>' +
+        '<canvas id="custom-chart-' + idx + '" height="220"></canvas>';
+      grid.appendChild(card);
+      setTimeout(function() { var c = document.getElementById('custom-chart-' + idx); if (c) renderSingleChart(c, chart); }, 60);
+    })(customCharts[i], i);
+  }
+}
+
+function removeCustomChart(idx) {
+  customCharts.splice(idx, 1);
+  renderCustomChartsGrid();
+}
+
 </script>
 </body>
 </html>
