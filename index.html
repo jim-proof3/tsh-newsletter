@@ -331,19 +331,36 @@
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;max-width:720px;margin-bottom:18px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px;">Build a Chart from Sheet Data</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div>
-            <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">Metric</label>
+          <div id="chartBuilderMetricsPanel">
+            <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">Metric 1</label>
             <select id="chartBuilderMetric" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);">
               <option value="">— Select after generating —</option>
             </select>
+            <!-- Metric 2 (multi/dual) -->
+            <div id="chartBuilderMetric2Row" style="display:none;margin-top:6px;">
+              <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;" id="chartBuilderMetric2Label">Metric 2</label>
+              <select id="chartBuilderMetric2" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);"></select>
+            </div>
+            <!-- Metric 3 (multi only) -->
+            <div id="chartBuilderMetric3Row" style="display:none;margin-top:6px;">
+              <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">Metric 3 (optional)</label>
+              <select id="chartBuilderMetric3" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);"></select>
+            </div>
           </div>
           <div>
             <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:3px;">Chart Type</label>
-            <select id="chartBuilderType" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);">
-              <option value="bar">Bar</option>
-              <option value="line">Line</option>
-              <option value="area">Area</option>
+            <select id="chartBuilderType" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:12px;color:var(--text);background:var(--bg);" onchange="updateChartBuilderMetrics()">
+              <option value="bar">Bar (1 metric)</option>
+              <option value="line">Line (1 metric)</option>
+              <option value="area">Area (1 metric)</option>
+              <option value="multi">Multi-line (up to 3, 1 axis)</option>
+              <option value="dual">Dual axis (2 metrics, 2 axes)</option>
             </select>
+            <!-- Dual axis labels -->
+            <div id="chartBuilderDualLabels" style="display:none;margin-top:8px;">
+              <input id="chartBuilderAxis1Label" placeholder="Left axis label (optional)" style="width:100%;border:1px solid var(--border);border-radius:5px;padding:5px 7px;font-size:11px;margin-bottom:4px;box-sizing:border-box;">
+              <input id="chartBuilderAxis2Label" placeholder="Right axis label (optional)" style="width:100%;border:1px solid var(--border);border-radius:5px;padding:5px 7px;font-size:11px;box-sizing:border-box;">
+            </div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;">
@@ -392,6 +409,7 @@
 </div>
 
 <script>
+
 
 
 
@@ -1023,6 +1041,8 @@ function renderNewsletter(text, charts) {
     html += '<div class="chart-embed"><div class="chart-embed-title">' + chartTitle + '</div><canvas id="' + id + '" height="180"></canvas></div>';
     pos = e + FENCE_CLOSE.length;
   }
+  /* Destroy all tracked chart instances before wiping innerHTML */
+  for (var cid in _chartRegistry) { destroyChart(cid); }
   body.innerHTML = html;
   body.contentEditable = isEditMode ? 'true' : 'false';
   body.style.outline   = isEditMode ? '2px solid var(--primary)' : 'none';
@@ -1109,8 +1129,10 @@ function getColors() {
 }
 function renderChartsTab() {
   var grid = document.getElementById('chartsGrid'), charts = allCharts[currentType] || [];
+  /* Destroy tab chart instances */
+  for (var ci in _chartRegistry) { if (ci.indexOf('chart-tab-') === 0) destroyChart(ci); }
   grid.innerHTML = '';
-  if (!charts.length) { grid.innerHTML = '<p style="color:var(--muted);padding:20px">No charts yet.</p>'; return; }
+  if (!charts.length) { grid.innerHTML = '<p style="color:var(--muted);padding:20px">No charts yet. Generate a newsletter first.</p>'; return; }
   var sel = selectedCharts[currentType] || [];
   for (var i = 0; i < charts.length; i++) {
     (function(chart, idx) {
@@ -1122,49 +1144,144 @@ function renderChartsTab() {
     })(charts[i], i);
   }
 }
+/* Track all Chart.js instances by canvas ID so we can destroy before re-creating */
+var _chartRegistry = {};
+
+function destroyChart(canvasId) {
+  if (_chartRegistry[canvasId]) {
+    try { _chartRegistry[canvasId].destroy(); } catch(e) {}
+    delete _chartRegistry[canvasId];
+  }
+  /* Also check Chart.js internal registry */
+  try {
+    var existing = Chart.getChart(canvasId);
+    if (existing) existing.destroy();
+  } catch(e) {}
+}
+
+function fmtTick(v) {
+  if (Math.abs(v) >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
+  if (Math.abs(v) >= 1000)    return '$' + (v/1000).toFixed(0) + 'k';
+  return v;
+}
+
+function fmtTooltip(ctx) {
+  var v = ctx.parsed.y;
+  if (Math.abs(v) >= 1000000) return ctx.dataset.label + ': $' + (v/1000000).toFixed(2) + 'M';
+  if (Math.abs(v) >= 1000)    return ctx.dataset.label + ': $' + (v/1000).toFixed(1) + 'k';
+  return ctx.dataset.label + ': ' + v;
+}
+
+function getSeriesColor(si, s, brand) {
+  if (brand === 'proof3') {
+    var p3palette = ['#ffffff', '#3d9cb5', '#a8d4e0'];
+    return p3palette[si] || p3palette[0];
+  }
+  var shpalette = ['#13474A', '#F1CC6C', '#DB9452'];
+  return s.color || shpalette[si] || shpalette[0];
+}
+
 function renderSingleChart(canvas, chart) {
   if (!chart || !chart.data || !chart.series || !chart.data.length) return null;
+
+  /* Destroy any existing instance on this canvas first */
+  destroyChart(canvas.id);
+
   var colors = getColors();
+  var brand  = document.documentElement.getAttribute('data-brand');
   var labels = chart.data.map(function(d) { return d.date || d.month || ''; });
+  var chartType = chart.type === 'area' ? 'line' : (chart.type || 'bar');
+
+  /* === DUAL Y-AXIS (type: 'dual') === */
+  if (chart.type === 'dual' && chart.series.length >= 2) {
+    return renderDualAxisChart(canvas, chart, labels, colors, brand);
+  }
+
+  /* === STANDARD SINGLE-AXIS (bar / line / area / multi) === */
   var datasets = chart.series.map(function(s, si) {
-    var brand = document.documentElement.getAttribute('data-brand');
-    var color = brand === 'proof3' ? (si === 0 ? '#ffffff' : '#3d9cb5') : (s.color || (si === 0 ? colors.primary : colors.secondary));
-    var vals  = chart.data.map(function(d) { return d[s.key] || 0; });
+    var color = getSeriesColor(si, s, brand);
+    var vals  = chart.data.map(function(d) { return typeof d[s.key] === 'number' ? d[s.key] : (parseFloat(String(d[s.key]).replace(/[$,%]/g,'')) || 0); });
     var isBar = chart.type === 'bar';
     return {
-      label: s.name, data: vals,
+      label: s.name, data: vals, yAxisID: 'y',
       backgroundColor: isBar ? vals.map(function(v) { return v < 0 ? colors.negative+'55' : color+'55'; }) : color+'33',
       borderColor:     isBar ? vals.map(function(v) { return v < 0 ? colors.negative        : color;       }) : color,
-      borderWidth:2, fill:chart.type==='area', tension:0.35,
-      pointRadius:chart.data.length>24?1:3, pointHoverRadius:5
+      borderWidth: 2, fill: chart.type === 'area', tension: 0.35,
+      pointRadius: chart.data.length > 24 ? 1 : 3, pointHoverRadius: 5
     };
   });
+
   try {
-    return new Chart(canvas, {
-      type: chart.type === 'area' ? 'line' : (chart.type || 'bar'),
+    var instance = new Chart(canvas, {
+      type: chartType,
       data: { labels: labels, datasets: datasets },
       options: {
         responsive: true,
         plugins: {
           legend: { display: datasets.length > 1, position: 'bottom', labels: { font:{size:10}, boxWidth:10, padding:10, color:colors.text } },
-          tooltip: { callbacks: { label: function(ctx) {
-            var v = ctx.parsed.y;
-            if (Math.abs(v) >= 1000000) return ctx.dataset.label + ': $' + (v/1000000).toFixed(2) + 'M';
-            if (Math.abs(v) >= 1000)    return ctx.dataset.label + ': $' + (v/1000).toFixed(1) + 'k';
-            return ctx.dataset.label + ': ' + v;
-          }}}
+          tooltip: { callbacks: { label: fmtTooltip } }
         },
         scales: {
-          y: { grid:{color:colors.grid}, ticks:{color:colors.text, font:{size:10}, callback:function(v) {
-            if (Math.abs(v)>=1000000) return '$'+(v/1000000).toFixed(1)+'M';
-            if (Math.abs(v)>=1000)    return '$'+(v/1000).toFixed(0)+'k';
-            return v;
-          }}},
+          y: { grid:{color:colors.grid}, ticks:{color:colors.text, font:{size:10}, callback:fmtTick} },
           x: { grid:{display:false}, ticks:{color:colors.text, font:{size:9}, maxTicksLimit:chart.data.length>24?12:24, maxRotation:45} }
         }
       }
     });
-  } catch(e) { console.error('Chart error:', e); return null; }
+    _chartRegistry[canvas.id] = instance;
+    return instance;
+  } catch(e) { console.error('Chart render error:', e); return null; }
+}
+
+/* === DUAL Y-AXIS CHART === */
+function renderDualAxisChart(canvas, chart, labels, colors, brand) {
+  var s0 = chart.series[0], s1 = chart.series[1];
+  var c0 = getSeriesColor(0, s0, brand), c1 = getSeriesColor(1, s1, brand);
+  var vals0 = chart.data.map(function(d) { return parseFloat(String(d[s0.key]||0).replace(/[$,%]/g,'')) || 0; });
+  var vals1 = chart.data.map(function(d) { return parseFloat(String(d[s1.key]||0).replace(/[$,%]/g,'')) || 0; });
+
+  /* Determine bar vs line per series */
+  var t0 = s0.chartType || 'bar';
+  var t1 = s1.chartType || 'line';
+
+  var datasets = [
+    {
+      label: s0.name, data: vals0, yAxisID: 'y',
+      type: t0,
+      backgroundColor: t0==='bar' ? vals0.map(function(v){return v<0?colors.negative+'55':c0+'55';}) : c0+'33',
+      borderColor:     t0==='bar' ? vals0.map(function(v){return v<0?colors.negative:c0;}) : c0,
+      borderWidth:2, fill:false, tension:0.35,
+      pointRadius:chart.data.length>24?1:3, pointHoverRadius:5
+    },
+    {
+      label: s1.name, data: vals1, yAxisID: 'y2',
+      type: t1,
+      backgroundColor: t1==='bar' ? vals1.map(function(v){return v<0?colors.negative+'55':c1+'55';}) : c1+'33',
+      borderColor:     t1==='bar' ? vals1.map(function(v){return v<0?colors.negative:c1;}) : c1,
+      borderWidth:2, fill:false, tension:0.35,
+      pointRadius:chart.data.length>24?1:3, pointHoverRadius:5
+    }
+  ];
+
+  try {
+    var instance = new Chart(canvas, {
+      type: 'bar',  /* outer type; each dataset overrides */
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: true, position: 'bottom', labels: { font:{size:10}, boxWidth:10, padding:10, color:colors.text } },
+          tooltip: { callbacks: { label: fmtTooltip } }
+        },
+        scales: {
+          y:  { position:'left',  grid:{color:colors.grid}, ticks:{color:c0, font:{size:10}, callback:fmtTick}, title:{display:!!(s0.axisLabel), text:s0.axisLabel||'', color:c0, font:{size:10}} },
+          y2: { position:'right', grid:{drawOnChartArea:false}, ticks:{color:c1, font:{size:10}, callback:fmtTick}, title:{display:!!(s1.axisLabel), text:s1.axisLabel||'', color:c1, font:{size:10}} },
+          x:  { grid:{display:false}, ticks:{color:colors.text, font:{size:9}, maxTicksLimit:chart.data.length>24?12:24, maxRotation:45} }
+        }
+      }
+    });
+    _chartRegistry[canvas.id] = instance;
+    return instance;
+  } catch(e) { console.error('Dual axis chart error:', e); return null; }
 }
 
 /* === EXPORT === */
@@ -1480,6 +1597,27 @@ var sheetDataCache = null; /* cached raw sheet data for chart builder */
 var customCharts   = [];   /* user-built charts */
 
 /* Populate the metric dropdown once sheet data is loaded */
+function cloneOptionsToSelect(srcId, destId) {
+  var src = document.getElementById(srcId), dest = document.getElementById(destId);
+  if (!src || !dest) return;
+  dest.innerHTML = '<option value="">— None —</option>' + src.innerHTML;
+}
+
+function updateChartBuilderMetrics() {
+  var type = (document.getElementById('chartBuilderType') || {}).value || 'bar';
+  var row2 = document.getElementById('chartBuilderMetric2Row');
+  var row3 = document.getElementById('chartBuilderMetric3Row');
+  var dualLbls = document.getElementById('chartBuilderDualLabels');
+  var lbl2 = document.getElementById('chartBuilderMetric2Label');
+  if (row2) row2.style.display = (type === 'multi' || type === 'dual') ? 'block' : 'none';
+  if (row3) row3.style.display = (type === 'multi') ? 'block' : 'none';
+  if (dualLbls) dualLbls.style.display = (type === 'dual') ? 'block' : 'none';
+  if (lbl2) lbl2.textContent = type === 'dual' ? 'Metric 2 (right axis)' : 'Metric 2';
+  /* Clone options from primary select to secondary selects */
+  cloneOptionsToSelect('chartBuilderMetric', 'chartBuilderMetric2');
+  cloneOptionsToSelect('chartBuilderMetric', 'chartBuilderMetric3');
+}
+
 function populateChartBuilderMetrics(sheetData, opsData) {
   sheetDataCache = sheetData;
   var sel = document.getElementById('chartBuilderMetric');
@@ -1494,6 +1632,9 @@ function populateChartBuilderMetrics(sheetData, opsData) {
     var o = document.createElement('option');
     o.value = String(j); o.textContent = name.trim(); sel.appendChild(o);
   }
+  /* Sync metric 2 and 3 dropdowns */
+  cloneOptionsToSelect('chartBuilderMetric', 'chartBuilderMetric2');
+  cloneOptionsToSelect('chartBuilderMetric', 'chartBuilderMetric3');
   /* Operating metrics (if available) */
   if (opsData && opsData.dataRows && opsData.dataRows.length) {
     window._opsDataCache = opsData;
@@ -1525,26 +1666,38 @@ function populateChartBuilderMetrics(sheetData, opsData) {
 }
 
 /* Build a chart from the selected metric + date range */
+function resolveMetricSel(selId) {
+  var sel = document.getElementById(selId);
+  if (!sel || !sel.value) return null;
+  var isOps  = sel.value.indexOf('ops:') === 0;
+  var colIdx = isOps ? parseInt(sel.value.replace('ops:',''), 10) : parseInt(sel.value, 10);
+  if (isNaN(colIdx)) return null;
+  var name = isOps
+    ? (window._opsDataCache ? (window._opsDataCache.hdr[colIdx]||'Metric') : 'Metric')
+    : (sheetDataCache ? (sheetDataCache.hdr[colIdx]||'Metric') : 'Metric');
+  var sourceRows = isOps
+    ? (window._opsDataCache ? window._opsDataCache.dataRows : [])
+    : (sheetDataCache ? sheetDataCache.allRows : []);
+  return { colIdx: colIdx, name: name, sourceRows: sourceRows, isOps: isOps };
+}
+
 function buildCustomChart() {
-  if (!sheetDataCache) { showStatus('error', 'Generate a newsletter first to load sheet data.'); return; }
-  var sel    = document.getElementById('chartBuilderMetric');
-  var ctype  = document.getElementById('chartBuilderType').value || 'line';
+  if (!sheetDataCache && !window._opsDataCache) { showStatus('error', 'Generate a newsletter first to load sheet data.'); return; }
+  var ctype  = (document.getElementById('chartBuilderType') || {}).value || 'line';
   var sm = document.getElementById('chartBuilderStartMonth'), sy = document.getElementById('chartBuilderStartYear');
   var em = document.getElementById('chartBuilderEndMonth'),   ey = document.getElementById('chartBuilderEndYear');
   var startV = (sm && sy && sm.value && sy.value) ? sy.value + '-' + sm.value : '';
   var endV   = (em && ey && em.value && ey.value) ? ey.value + '-' + em.value : '';
-  var isOps   = sel.value && sel.value.indexOf('ops:') === 0;
-  var colIdx  = isOps ? parseInt(sel.value.replace('ops:', ''), 10) : parseInt(sel.value, 10);
-  if (!sel.value || isNaN(colIdx)) { showStatus('error', 'Select a metric first.'); return; }
-  var metricName = isOps
-    ? (window._opsDataCache ? (window._opsDataCache.hdr[colIdx] || 'Metric') : 'Metric')
-    : (sheetDataCache ? sheetDataCache.hdr[colIdx] || 'Metric' : 'Metric');
 
-  /* Filter rows by date range */
-  var sourceRows = isOps
-    ? (window._opsDataCache ? window._opsDataCache.dataRows : [])
-    : (sheetDataCache ? sheetDataCache.allRows : []);
-  if (!sourceRows.length) { showStatus('error', isOps ? 'No operating metrics loaded yet.' : 'Generate a newsletter first.'); return; }
+  /* Resolve primary metric */
+  var m1 = resolveMetricSel('chartBuilderMetric');
+  if (!m1) { showStatus('error', 'Select at least one metric.'); return; }
+  var m2 = (ctype === 'multi' || ctype === 'dual') ? resolveMetricSel('chartBuilderMetric2') : null;
+  var m3 = (ctype === 'multi') ? resolveMetricSel('chartBuilderMetric3') : null;
+
+  /* Use primary source rows; filter by date */
+  var sourceRows = m1.sourceRows;
+  if (!sourceRows.length) { showStatus('error', 'No data loaded for this metric.'); return; }
   var rows = sourceRows;
   if (startV || endV) {
     var sd = startV ? new Date(startV + '-01') : null;
@@ -1559,27 +1712,61 @@ function buildCustomChart() {
   }
   if (!rows.length) { showStatus('error', 'No data in selected date range.'); return; }
 
-  /* Build chart data */
+  /* Apply date filter */
+  if (startV || endV) {
+    var sd2 = startV ? new Date(startV + '-01') : null;
+    var ed2 = endV   ? new Date(endV   + '-01') : null;
+    rows = rows.filter(function(row) {
+      var d = parseRowDate(row[0]);
+      if (!d) return false;
+      if (sd2 && d < sd2) return false;
+      if (ed2 && d > ed2) return false;
+      return true;
+    });
+  }
+  if (!rows.length) { showStatus('error', 'No data in selected date range.'); return; }
+
+  /* Build date labels + data points */
   var colors = getColors();
+  function makeLabel(row) {
+    var d = parseRowDate(row[0] || '');
+    return d ? (['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + String(d.getFullYear()).slice(2)) : (row[0] || '');
+  }
+  function makeVal(row, colIdx) {
+    return parseFloat(String(row[colIdx] || '').replace(/[$,%]/g, '')) || 0;
+  }
+
   var data = rows.map(function(row) {
-    var rawDate = row[0] || '';
-    var d = parseRowDate(rawDate);
-    var label = d ? (['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + String(d.getFullYear()).slice(2)) : rawDate;
-    var val = parseFloat(String(row[colIdx] || '').replace(/[$,%]/g, '')) || 0;
-    return { date: label, value: val };
+    var pt = { date: makeLabel(row), v1: makeVal(row, m1.colIdx) };
+    if (m2) pt.v2 = makeVal(row, m2.colIdx);
+    if (m3) pt.v3 = makeVal(row, m3.colIdx);
+    return pt;
   });
 
+  /* Build series array */
+  var series = [{ key: 'v1', name: m1.name, color: colors.primary }];
+  if (m2) series.push({ key: 'v2', name: m2.name, color: colors.secondary,
+    chartType: ctype === 'dual' ? 'line' : undefined,
+    axisLabel: ctype === 'dual' ? (document.getElementById('chartBuilderAxis2Label')||{}).value || '' : undefined });
+  if (m3) series.push({ key: 'v3', name: m3.name, color: '#DB9452' });
+
+  /* For dual: attach left axis label to series 0 */
+  if (ctype === 'dual') {
+    series[0].axisLabel = (document.getElementById('chartBuilderAxis1Label')||{}).value || '';
+  }
+
+  var title = m1.name + (m2 ? ' vs ' + m2.name : '') + (m3 ? ' & ' + m3.name : '');
   var chartDef = {
-    type:   ctype,
-    title:  metricName,
+    type:   ctype === 'multi' ? 'line' : ctype,
+    title:  title,
     data:   data,
-    series: [{ key: 'value', name: metricName, color: colors.primary }],
+    series: series,
     custom: true
   };
 
   customCharts.push(chartDef);
   renderCustomChartsGrid();
-  showStatus('success', 'Chart added: ' + metricName + ' (' + rows.length + ' months).');
+  showStatus('success', 'Chart added: ' + title + ' (' + rows.length + ' months).');
 }
 
 function getSectionOptions() {
@@ -1838,6 +2025,7 @@ function clearDropHighlights(body) {
   var els = body.querySelectorAll('.drop-target-highlight');
   for (var i = 0; i < els.length; i++) els[i].classList.remove('drop-target-highlight');
 }
+
 
 </script>
 </body>
