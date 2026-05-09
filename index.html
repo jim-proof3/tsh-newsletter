@@ -285,7 +285,7 @@
   <div class="top-bar-meta" id="topBarMeta"></div>
   <div class="top-bar-actions">
     <button class="top-bar-btn" id="editToggleBtn" onclick="toggleEdit()">Edit</button>
-    <button class="top-bar-btn" id="chartPickerBtn" onclick="toggleChartPicker()">&#9783; Charts</button>
+    <button class="top-bar-btn" id="chartPickerBtn" onclick="toggleChartPicker()">&#9783; Chart Picker</button>
     <button class="top-bar-btn" id="savesPanelBtn" onclick="toggleSavesPanel()">&#128190; Saves</button>
     <button class="top-bar-btn" onclick="saveToCloud()">Save</button>
     <button class="top-bar-btn" onclick="copyNewsletter()">Copy</button>
@@ -511,9 +511,18 @@
 
 
 
+
+
+
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
+var FAVICON_SH = "data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27> <rect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%2313474A%27/> <text x=%278%27 y=%2722%27 font-family=%27Georgia,serif%27 font-size=%2713%27 font-weight=%27bold%27 fill=%27%23F1CC6C%27>S</text> <text x=%2717%27 y=%2722%27 font-family=%27Georgia,serif%27 font-size=%2713%27 font-weight=%27bold%27 fill=%27%23ffffff%27>H</text> </svg>";
+var FAVICON_P3 = "data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27> <rect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%231f2938%27/> <text x=%275%27 y=%2722%27 font-family=%27Georgia,serif%27 font-size=%2713%27 font-weight=%27bold%27 fill=%27%233d9cb5%27>p</text> <text x=%2716%27 y=%2722%27 font-family=%27Georgia,serif%27 font-size=%2713%27 font-weight=%27bold%27 fill=%27%23ffffff%27>3</text> </svg>";
+function setFavicon(brand) {
+  var el = document.getElementById('pageFavicon');
+  if (el) el.setAttribute('href', brand === 'proof3' ? FAVICON_P3 : FAVICON_SH);
+}
 /* Fixed KV keys for auto-saves - same key = always overwritten = latest version */
 var AUTOSAVE_KV_ID = { all: 'autosave-all-entities', p3spv: 'autosave-p3spv' };
 var DATA_SHEET_ID = '1NDhm82bK-tyOtkyyZjGRB0SQpbwMeRmZ6yOazQ-BILo';
@@ -541,12 +550,6 @@ var CONTEXT_FIELDS = {
     { id:'p3Highlights', label:'proof3-Specific Highlights', type:'textarea', rows:2, placeholder:'e.g. Gym at 91 members, coaching revenue up, second location lease in negotiation.' }
   ],
   proof3gym: [
-    { id:'membersNow',      label:'Members This Month', type:'number', placeholder:'86'  },
-    { id:'membersPrior',    label:'Members Last Month', type:'number', placeholder:'80'  },
-    { id:'trialsNow',       label:'Trial Members',      type:'number', placeholder:'4'   },
-    { id:'holdsNow',        label:'On Hold',            type:'number', placeholder:'2'   },
-    { id:'newMembers',      label:'New This Month',     type:'number', placeholder:'8'   },
-    { id:'churnedMembers',  label:'Churned',            type:'number', placeholder:'2'   },
     { id:'coachingClients', label:'Coaching Clients',   type:'number', placeholder:'335' },
     { id:'memberTarget',    label:'Member Target',      type:'number', placeholder:'100' },
     { id:'memberStory', label:'Member Story', type:'textarea', rows:3, placeholder:'Name, age, results, their words.' }
@@ -656,6 +659,7 @@ function setType(type, cardEl) {
   var lSH = document.getElementById('topBarLogoSH'), lP3 = document.getElementById('topBarLogoP3');
   if (lSH) lSH.style.display = cfg.brand === 'proof3' ? 'none' : 'block';
   if (lP3) lP3.style.display = cfg.brand === 'proof3' ? 'block' : 'none';
+  setFavicon(cfg.brand);
   renderContextFields(type); /* restoreContextFields called inside renderContextFields */
   var cp = document.getElementById('chartPickerPanel'); if (cp) cp.style.display = 'none';
   showNewsletterForType(type);
@@ -721,12 +725,8 @@ function showStatus(type, msg) {
 function getVal(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
 
 function buildContext() {
-  var mN = getVal('membersNow'), mP = getVal('membersPrior');
-  var net = (mN && mP) ? parseInt(mN, 10) - parseInt(mP, 10) : null;
   return {
-    gym: { membersNow:mN, membersPrior:mP, netChange:net!==null?(net>=0?'+'+net:''+net):'',
-           trials:getVal('trialsNow'), holds:getVal('holdsNow'), newMembers:getVal('newMembers'),
-           churned:getVal('churnedMembers'), target:getVal('memberTarget'), memberStory:getVal('memberStory') },
+    gym: { memberStory:getVal('memberStory'), target:getVal('memberTarget') },
     coaching:  { clients: getVal('coachingClients') },
     portfolio:           getVal('portfolioUpdates'),
     financialHighlights: getVal('financialHighlights'),
@@ -849,117 +849,120 @@ async function fetchSheetData(type) {
 }
 
 /* === OPERATING METRICS FETCH === */
+var OPS_COL_MAP = {
+  trials:       '# of Trial Members',
+  newMembers:   '# of Member Sales',
+  churned:      '# of Member Churns',
+  netChange:    'Net Members +/-',
+  aggregate:    'Aggregate Members',
+  onHold:       '# of Members on Hold',
+  mrrAdded:     'MRR Added',
+  mrrChurned:   'MRR Churned',
+  netMRR:       'Net MRR',
+  aggMRR:       'Aggregate MRR by Mo',
+  nrr:          'Net Revenue Retention',
+  churnPct1mo:  'Client # Churn %',
+  churnPct3mo:  '3 Mo Churn %',
+  churnPct6mo:  '6 Mo Churn %',
+  churnPct12mo: '12 Mo Churn %'
+};
+
 async function fetchOpsData() {
   var url = 'https://docs.google.com/spreadsheets/d/' + DATA_SHEET_ID + '/export?format=csv&gid=' + OPS_SHEET_GID;
   try {
     var resp = await fetch(url);
     if (!resp.ok) throw new Error('Ops sheet HTTP ' + resp.status);
     var csv  = await resp.text();
-    var lines = csv.split('\n').filter(function(l) { return l.trim(); });
-    if (lines.length < 2) return null;
-    var rows = lines.map(parseCsvLine);
-    /* Row 0 = headers */
-    var hdr  = rows[0];
-    /* Find column indices by header name */
-    function col(name) {
-      for (var i = 0; i < hdr.length; i++) {
-        if (hdr[i] && hdr[i].trim().toLowerCase() === name.toLowerCase()) return i;
+    var csvLines = csv.split('\n').filter(function(l) { return l.trim(); });
+    if (csvLines.length < 2) return null;
+    var rows = csvLines.map(parseCsvLine);
+    var hdrIdx = -1;
+    for (var i = 0; i < Math.min(rows.length, 15); i++) {
+      for (var j = 0; j < rows[i].length; j++) {
+        if (rows[i][j] && rows[i][j].trim() === 'Aggregate Members') { hdrIdx = i; break; }
       }
+      if (hdrIdx >= 0) break;
+    }
+    if (hdrIdx < 0) { console.warn('Ops metrics header not found'); return null; }
+    var hdr = rows[hdrIdx];
+    function colIdx(name) {
+      for (var i = 0; i < hdr.length; i++) { if (hdr[i] && hdr[i].trim() === name) return i; }
       return -1;
     }
-    var idxMap = {
-      date:           col('Date'),
-      gymActive:      col('Gym Active Members'),
-      gymTrials:      col('Gym Trial Members'),
-      gymHolds:       col('Gym Members on Hold'),
-      gymNew:         col('Gym New Members'),
-      gymChurned:     col('Gym Churned Members'),
-      gymNetChange:   col('Gym Net Member Change'),
-      gymTarget:      col('Gym Member Target'),
-      coachingActive: col('Coaching Active Clients'),
-      coachingNew:    col('Coaching New Clients'),
-      coachingChurned:col('Coaching Churned Clients'),
-      gymRevPerMember:col('Gym Revenue per Member'),
-      coachRevPerClient:col('Coaching Revenue per Client')
-    };
-    /* Find last row that has gym active members data */
-    var latestRow = null;
-    for (var i = rows.length - 1; i >= 1; i--) {
-      var v = idxMap.gymActive >= 0 ? rows[i][idxMap.gymActive] : '';
-      if (v && v.trim() && v.trim() !== '0') { latestRow = rows[i]; break; }
-    }
-    /* Build all rows with data for historical ops context */
+    var idxMap = { date: 0 };
+    for (var key in OPS_COL_MAP) idxMap[key] = colIdx(OPS_COL_MAP[key]);
     var dataRows = [];
-    for (var i = 1; i < rows.length; i++) {
+    for (var i = hdrIdx + 1; i < rows.length; i++) {
       var r = rows[i];
       if (!r[0] || !r[0].trim()) continue;
-      var activeVal = idxMap.gymActive >= 0 ? (r[idxMap.gymActive] || '').trim() : '';
-      if (!activeVal || activeVal === '0') continue;
+      if (idxMap.aggregate >= 0 && !(r[idxMap.aggregate] || '').trim()) continue;
       dataRows.push(r);
     }
-    return { hdr: hdr, idxMap: idxMap, latestRow: latestRow, dataRows: dataRows, allRows: rows.slice(1) };
-  } catch(e) {
-    console.warn('fetchOpsData error:', e);
-    return null;
-  }
+    var latestRow = dataRows.length > 0 ? dataRows[dataRows.length - 1] : null;
+    var priorRow  = dataRows.length > 1 ? dataRows[dataRows.length - 2] : null;
+    return { hdr:hdr, idxMap:idxMap, latestRow:latestRow, priorRow:priorRow, dataRows:dataRows };
+  } catch(e) { console.warn('fetchOpsData error:', e); return null; }
 }
 
-/* Auto-populate context fields from latest ops row */
-function populateOpsFields(ops) {
-  if (!ops || !ops.latestRow) return;
-  var r = ops.latestRow, m = ops.idxMap;
-  function setField(id, colIdx) {
-    if (colIdx < 0) return;
-    var val = (r[colIdx] || '').trim().replace(/[$,%]/g, '');
-    if (!val || val === '0') return;
-    var el = document.getElementById(id);
-    if (el && !el.value) el.value = val;  /* only set if empty - don't overwrite user input */
-  }
-  setField('membersNow',      m.gymActive);
-  setField('trialsNow',       m.gymTrials);
-  setField('holdsNow',        m.gymHolds);
-  setField('newMembers',      m.gymNew);
-  setField('churnedMembers',  m.gymChurned);
-  setField('memberTarget',    m.gymTarget);
-  setField('coachingClients', m.coachingActive);
-  /* Compute prior month members if we have 2+ rows with data */
-  if (m.gymActive >= 0 && ops.dataRows.length >= 2) {
-    var priorRow = ops.dataRows[ops.dataRows.length - 2];
-    var priorVal = (priorRow[m.gymActive] || '').trim().replace(/[$,%]/g, '');
-    if (priorVal && priorVal !== '0') {
-      var priorEl = document.getElementById('membersPrior');
-      if (priorEl && !priorEl.value) priorEl.value = priorVal;
-    }
-  }
-}
+function populateOpsFields(ops) { /* gym member counts now come from sheet via buildOpsContext */ }
 
-/* Build ops context string for Claude prompt */
 function buildOpsContext(ops) {
   if (!ops || !ops.dataRows || !ops.dataRows.length) return '';
-  var m = ops.idxMap, lines = [];
-  lines.push('proof3 Gym 1 + Coaching - Monthly Operating Metrics:');
-  lines.push('Date\tActive Members\tTrials\tHolds\tNew\tChurned\tNet Change\tTarget\tCoaching Clients\tNew Coaching\tChurned Coaching');
+  var m = ops.idxMap;
+  function v(row, key) { return row && m[key] >= 0 ? (row[m[key]] || '').trim() : ''; }
+  var latest = ops.latestRow, prior = ops.priorRow;
+  var out = ['=== proof3 Gym 1 Operating Metrics (live from Google Sheet) ===', ''];
+  if (latest) {
+    out.push('CURRENT MONTH (' + v(latest,'date') + '):');
+    out.push('  Aggregate Members: '   + v(latest,'aggregate'));
+    if (prior) out.push('  Prior Month Members: ' + v(prior,'aggregate') + '  Net change: ' + v(latest,'netChange'));
+    out.push('  New Member Sales: '   + v(latest,'newMembers'));
+    out.push('  Member Churns: '      + v(latest,'churned'));
+    out.push('  Trial Members: '      + v(latest,'trials'));
+    out.push('  Members on Hold: '    + v(latest,'onHold'));
+    out.push('  MRR Added: '          + v(latest,'mrrAdded'));
+    out.push('  MRR Churned: '        + v(latest,'mrrChurned'));
+    out.push('  Net MRR: '            + v(latest,'netMRR'));
+    out.push('  Aggregate MRR: '      + v(latest,'aggMRR'));
+    if (v(latest,'nrr'))          out.push('  Net Revenue Retention: '  + v(latest,'nrr') + 'x');
+    if (v(latest,'churnPct1mo'))  out.push('  1-Mo Churn %: '    + v(latest,'churnPct1mo')  + '%');
+    if (v(latest,'churnPct3mo'))  out.push('  3-Mo Churn %: '    + v(latest,'churnPct3mo')  + '%');
+    if (v(latest,'churnPct6mo'))  out.push('  6-Mo Churn %: '    + v(latest,'churnPct6mo')  + '%');
+    if (v(latest,'churnPct12mo')) out.push('  12-Mo Churn %: '   + v(latest,'churnPct12mo') + '%');
+  }
+  out.push('');
+  out.push('ALL MONTHS (Date|Trials|New|Churns|Net|Aggregate|Hold|MRR Added|MRR Churned|Net MRR|Agg MRR):');
   for (var i = 0; i < ops.dataRows.length; i++) {
     var r = ops.dataRows[i];
-    var row = [
-      r[m.date]            || '',
-      m.gymActive      >= 0 ? r[m.gymActive]       || '' : '',
-      m.gymTrials      >= 0 ? r[m.gymTrials]        || '' : '',
-      m.gymHolds       >= 0 ? r[m.gymHolds]         || '' : '',
-      m.gymNew         >= 0 ? r[m.gymNew]            || '' : '',
-      m.gymChurned     >= 0 ? r[m.gymChurned]        || '' : '',
-      m.gymNetChange   >= 0 ? r[m.gymNetChange]      || '' : '',
-      m.gymTarget      >= 0 ? r[m.gymTarget]         || '' : '',
-      m.coachingActive >= 0 ? r[m.coachingActive]    || '' : '',
-      m.coachingNew    >= 0 ? r[m.coachingNew]       || '' : '',
-      m.coachingChurned>= 0 ? r[m.coachingChurned]   || '' : ''
-    ];
-    lines.push(row.join('\t'));
+    out.push([v(r,'date'),v(r,'trials'),v(r,'newMembers'),v(r,'churned'),v(r,'netChange'),
+              v(r,'aggregate'),v(r,'onHold'),v(r,'mrrAdded'),v(r,'mrrChurned'),v(r,'netMRR'),v(r,'aggMRR')].join('|'));
   }
-  return lines.join('\n');
+  return out.join('\n');
 }
 
-/* populateChartBuilderOpsMetrics merged into populateChartBuilderMetrics */
+function populateChartBuilderOpsMetrics(ops) {
+  if (!ops || !ops.dataRows || !ops.dataRows.length) return;
+  window._opsDataCache = ops;
+  var sel = document.getElementById('chartBuilderMetric'); if (!sel) return;
+  var div = document.createElement('option'); div.disabled = true;
+  div.textContent = '── Gym Operating Metrics ──'; sel.appendChild(div);
+  var m = ops.idxMap;
+  var cols = [
+    {k:'aggregate',n:'Aggregate Members'},{k:'trials',n:'Trial Members'},
+    {k:'onHold',n:'Members on Hold'},{k:'newMembers',n:'New Member Sales'},
+    {k:'churned',n:'Member Churns'},{k:'netChange',n:'Net Members +/-'},
+    {k:'mrrAdded',n:'MRR Added'},{k:'mrrChurned',n:'MRR Churned'},
+    {k:'netMRR',n:'Net MRR'},{k:'aggMRR',n:'Aggregate MRR'},
+    {k:'churnPct1mo',n:'1-Mo Churn %'},{k:'churnPct3mo',n:'3-Mo Churn %'},
+    {k:'churnPct6mo',n:'6-Mo Churn %'},{k:'churnPct12mo',n:'12-Mo Churn %'}
+  ];
+  for (var i = 0; i < cols.length; i++) {
+    var ci = m[cols[i].k]; if (ci < 0) continue;
+    var o = document.createElement('option'); o.value = 'ops:' + ci; o.textContent = cols[i].n; sel.appendChild(o);
+  }
+  cloneOptionsToSelect('chartBuilderMetric','chartBuilderMetric2');
+  cloneOptionsToSelect('chartBuilderMetric','chartBuilderMetric3');
+}
 
 /* === GENERATE === */
 async function generate() {
@@ -1258,6 +1261,7 @@ async function shareNewsletter() {
   var lSH = document.getElementById('topBarLogoSH'), lP3 = document.getElementById('topBarLogoP3');
   if (lSH) lSH.style.display = cfg.brand === 'proof3' ? 'none' : 'block';
   if (lP3) lP3.style.display = cfg.brand === 'proof3' ? 'block' : 'none';
+  setFavicon(cfg.brand);
   var ogImg   = document.getElementById('og-image');
   var ogTitle = document.getElementById('og-title');
   var ogDesc  = document.getElementById('og-description');
@@ -1477,17 +1481,9 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData) {
     p3spv: 'proof3/SPV1 investors exclusively. Member count and trajectory, gym revenue, coaching revenue, burn, path to profitability. No broader SageHouse portfolio content.'
   };
   var lines = [], g = ctx.gym;
-  if (g.membersNow) {
-    lines.push('proof3 Gym 1 member data this month:');
-    lines.push('  Active: ' + g.membersNow + ' (prior: ' + (g.membersPrior||'n/a') + ', net: ' + (g.netChange||'n/a') + ')');
-    if (g.trials)     lines.push('  Trials: '    + g.trials);
-    if (g.holds)      lines.push('  On hold: '   + g.holds);
-    if (g.newMembers) lines.push('  New: '       + g.newMembers);
-    if (g.churned)    lines.push('  Churned: '   + g.churned);
-    if (g.target)     lines.push('  Target: '    + g.target);
-  }
-  if (g.memberStory)                lines.push('\nMember story:\n' + g.memberStory);
-  if (ctx.coaching.clients)         lines.push('\nCoaching clients: ' + ctx.coaching.clients);
+  if (g.memberStory)        lines.push('Member story:\n' + g.memberStory);
+  if (g.target)             lines.push('Member target: ' + g.target);
+  if (ctx.coaching.clients) lines.push('Coaching clients: ' + ctx.coaching.clients);
   if (ctx.portfolio)                lines.push('\nPortfolio company updates:\n' + ctx.portfolio);
   if (ctx.financialHighlights)      lines.push('\nFinancial highlights (use these to frame the numbers):\n' + ctx.financialHighlights);
   if (ctx.tshHighlights)            lines.push('\nTSH-specific highlights (TSH LLC, SHA, SHC):\n' + ctx.tshHighlights);
@@ -2300,6 +2296,9 @@ function setupContextFieldPersistence() {
     saveTimer = setTimeout(saveContextFields, 600);
   });
 }
+
+
+
 
 
 
