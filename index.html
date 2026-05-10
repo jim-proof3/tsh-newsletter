@@ -528,6 +528,8 @@
 
 
 
+
+
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
@@ -695,9 +697,10 @@ function setType(type, cardEl) {
   if (chartsTabEl && chartsTabEl.style.display !== 'none') {
     renderChartsTab();
   }
-  /* Reset custom charts - they belong to the previous type */
+  /* Reset custom charts and chart builder state for the new type */
   customCharts = [];
   renderCustomChartsGrid();
+  _multiTabPopulated = false; /* allow re-population for new type */
 }
 
 (function() {
@@ -1125,24 +1128,38 @@ async function fetchTabData(tab) {
   } catch(e) { console.warn('fetchTabData error for ' + tab.label + ':', e); return null; }
 }
 
+var _multiTabPopulated = false;
+
 async function populateMultiTabChartBuilder() {
+  /* Only populate once per session - tabs are cached */
+  if (_multiTabPopulated) return;
   var sel = document.getElementById('chartBuilderMetric');
   if (!sel) return;
-  sel.innerHTML = '<option value="">Loading tabs...</option>';
+
+  /* Save current selection so we don't lose it */
+  var currentVal = sel.value;
+
+  /* Remove any existing multi-tab groups (they start with divider options) */
+  /* But keep the initial financial options from populateChartBuilderMetrics */
+  /* Mark the boundary: add a section divider then additional tabs */
+  var divHead = document.createElement('option');
+  divHead.disabled = true;
+  divHead.textContent = '── Additional Tabs ──';
+  sel.appendChild(divHead);
 
   for (var t = 0; t < CHART_BUILDER_TABS.length; t++) {
     var tab = CHART_BUILDER_TABS[t];
     if (!tab.gid || tab.gid.indexOf('PENDING') === 0) continue;
+    /* Skip the two rollup tabs - already included by populateChartBuilderMetrics */
+    if (tab.id === 'cb_all' || tab.id === 'cb_p3spv') continue;
     var data = await fetchTabData(tab);
     if (!data || !data.hdr || !data.hdr.length) continue;
 
-    /* Add group divider */
     var div = document.createElement('option');
     div.disabled = true;
     div.textContent = '── ' + tab.label + ' ──';
     sel.appendChild(div);
 
-    /* Add each non-empty column */
     for (var j = 1; j < data.hdr.length; j++) {
       var name = data.hdr[j];
       if (!name || !name.trim()) continue;
@@ -1153,9 +1170,10 @@ async function populateMultiTabChartBuilder() {
     }
   }
 
-  /* Remove loading placeholder */
-  var loading = sel.querySelector('option[value=""]');
-  if (loading) loading.textContent = '— Choose a metric —';
+  /* Restore previous selection */
+  if (currentVal) sel.value = currentVal;
+
+  _multiTabPopulated = true;
 
   /* Sync to metric2/3 */
   cloneOptionsToSelect('chartBuilderMetric', 'chartBuilderMetric2');
@@ -2550,6 +2568,8 @@ function setupContextFieldPersistence() {
     saveTimer = setTimeout(saveContextFields, 600);
   });
 }
+
+
 
 
 
