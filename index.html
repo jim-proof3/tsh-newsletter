@@ -514,11 +514,14 @@
 
 
 
+
+
+
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
-var FAVICON_SH = "data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27> <rect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%2313474A%27/> <text x=%278%27 y=%2722%27 font-family=%27Georgia,serif%27 font-size=%2713%27 font-weight=%27bold%27 fill=%27%23F1CC6C%27>S</text> <text x=%2717%27 y=%2722%27 font-family=%27Georgia,serif%27 font-size=%2713%27 font-weight=%27bold%27 fill=%27%23ffffff%27>H</text> </svg>";
-var FAVICON_P3 = "data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27> <rect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%231f2938%27/> <text x=%275%27 y=%2722%27 font-family=%27Georgia,serif%27 font-size=%2713%27 font-weight=%27bold%27 fill=%27%233d9cb5%27>p</text> <text x=%2716%27 y=%2722%27 font-family=%27Georgia,serif%27 font-size=%2713%27 font-weight=%27bold%27 fill=%27%23ffffff%27>3</text> </svg>";
+var FAVICON_SH = "data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27> <rect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%2313474A%27/> <text x=%2716%27 y=%2714%27 font-family=%27Georgia,serif%27 font-size=%278%27 font-weight=%27bold%27 fill=%27%23F1CC6C%27 text-anchor=%27middle%27 letter-spacing=%271%27>THE</text> <text x=%2716%27 y=%2724%27 font-family=%27Georgia,serif%27 font-size=%2710%27 font-weight=%27bold%27 fill=%27%23ffffff%27 text-anchor=%27middle%27 letter-spacing=%270.5%27>SAGE</text> </svg>";
+var FAVICON_P3 = "data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27> <rect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%231f2938%27/> <circle cx=%278%27 cy=%2716%27 r=%274%27 fill=%27%233d9cb5%27/> <circle cx=%2716%27 cy=%2716%27 r=%274%27 fill=%27%233d9cb5%27/> <circle cx=%2724%27 cy=%2716%27 r=%274%27 fill=%27%233d9cb5%27/> </svg>";
 function setFavicon(brand) {
   var el = document.getElementById('pageFavicon');
   if (el) el.setAttribute('href', brand === 'proof3' ? FAVICON_P3 : FAVICON_SH);
@@ -531,7 +534,8 @@ var SHEET_CONFIGS = {
   all:   { sheetId: DATA_SHEET_ID, gid: '0',          label: 'All Entities',  tabName: 'r/u - All Entities',    brand: 'sagehouse' },
   p3spv: { sheetId: DATA_SHEET_ID, gid: '1633984252', label: 'proof3 + SPV1', tabName: 'r/u - p3 w/ SHC SPV1', brand: 'proof3'    }
 };
-var OPS_SHEET_GID = '1549504871';  /* p3g1 - Operating Metrics tab */
+var OPS_SHEET_GID     = '1549504871';  /* p3g1 - Op Metrics tab */
+var COACHING_SHEET_GID = '1081849810';     /* p3 Coaching - Ops Metrics tab */
 
 var OG_IMAGES = {
   sagehouse: 'https://jim-proof3.github.io/tsh-newsletter/sh-logo.png',
@@ -550,12 +554,12 @@ var CONTEXT_FIELDS = {
     { id:'p3Highlights', label:'proof3-Specific Highlights', type:'textarea', rows:2, placeholder:'e.g. Gym at 91 members, coaching revenue up, second location lease in negotiation.' }
   ],
   proof3gym: [
-    { id:'coachingClients', label:'Coaching Clients',   type:'number', placeholder:'335' },
-    { id:'memberTarget',    label:'Member Target',      type:'number', placeholder:'100' },
+    { id:'gym1MemberTarget', label:'Gym1 Member Target', type:'number', placeholder:'100' },
+    { id:'p3cClientTarget',  label:'p3c Client Target',  type:'number', placeholder:'350' },
     { id:'memberStory', label:'Member Story', type:'textarea', rows:3, placeholder:'Name, age, results, their words.' }
   ],
   spv1: [
-    { id:'debtContext', label:'Debt / Note Structure', type:'textarea', rows:2, placeholder:'e.g. SPV1 convertible notes $378k, 4 investors, 8% simple interest.' }
+    { id:'p3Notes', label:'Other Important proof3 Notes', type:'textarea', rows:2, placeholder:'e.g. SPV1 convertible notes $378k, 4 investors, 8% simple interest. Any other key context for investors.' }
   ]
 };
 
@@ -726,13 +730,13 @@ function getVal(id) { var el = document.getElementById(id); return el ? el.value
 
 function buildContext() {
   return {
-    gym: { memberStory:getVal('memberStory'), target:getVal('memberTarget') },
-    coaching:  { clients: getVal('coachingClients') },
+    gym: { memberStory:getVal('memberStory'), gym1Target:getVal('gym1MemberTarget'), p3cTarget:getVal('p3cClientTarget') },
+    coaching:  {},
     portfolio:           getVal('portfolioUpdates'),
     financialHighlights: getVal('financialHighlights'),
     tshHighlights:       getVal('tshHighlights'),
     p3Highlights:        getVal('p3Highlights'),
-    debt:                getVal('debtContext'),
+    p3notes:             getVal('p3Notes'),
     unusual:             getVal('unusualItems'),
     focus:               getVal('focusItems')
   };
@@ -964,6 +968,93 @@ function populateChartBuilderOpsMetrics(ops) {
   cloneOptionsToSelect('chartBuilderMetric','chartBuilderMetric3');
 }
 
+
+/* === COACHING OPS METRICS FETCH === */
+var COACHING_COL_MAP = {
+  clientCount:     'Client Count by Month',
+  aggregateLTV:    'Aggregate Clients LTV',
+  monthlyLost:     'Monthly Clients Lost - #',
+  retentionPct:    'Monthly Retention %',
+  retention3mo:    'Avg Retention % - Prior 3 Months',
+  losCurrentClients: 'Avg Length of Stay - Current Clients',
+  losHistoricClients:'Avg Length of Stay - Historic Clients',
+  losAllClients:   'Avg Length of Stay - All Clients',
+  avgPrice:        'Avg Price Point',
+  avgPrice3mo:     '3 Mo. Avg Price Point'
+};
+
+async function fetchCoachingOpsData() {
+  if (!COACHING_SHEET_GID || COACHING_SHEET_GID === 'PENDING') {
+    console.log('Coaching ops GID not yet configured');
+    return null;
+  }
+  var url = 'https://docs.google.com/spreadsheets/d/' + DATA_SHEET_ID + '/export?format=csv&gid=' + COACHING_SHEET_GID;
+  try {
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('Coaching ops sheet HTTP ' + resp.status);
+    var csv = await resp.text();
+    var csvLines = csv.split('\n').filter(function(l) { return l.trim(); });
+    if (csvLines.length < 2) return null;
+    var rows = csvLines.map(parseCsvLine);
+    /* Find header row containing 'Client Count by Month' */
+    var hdrIdx = -1;
+    for (var i = 0; i < Math.min(rows.length, 15); i++) {
+      for (var j = 0; j < rows[i].length; j++) {
+        if (rows[i][j] && rows[i][j].trim() === 'Client Count by Month') { hdrIdx = i; break; }
+      }
+      if (hdrIdx >= 0) break;
+    }
+    if (hdrIdx < 0) { console.warn('Coaching ops: header row not found'); return null; }
+    var hdr = rows[hdrIdx];
+    function colIdx(name) {
+      for (var i = 0; i < hdr.length; i++) { if (hdr[i] && hdr[i].trim() === name) return i; }
+      return -1;
+    }
+    var idxMap = { date: 0 };
+    for (var key in COACHING_COL_MAP) idxMap[key] = colIdx(COACHING_COL_MAP[key]);
+    var dataRows = [];
+    for (var i = hdrIdx + 1; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r[0] || !r[0].trim()) continue;
+      if (idxMap.clientCount >= 0 && !(r[idxMap.clientCount] || '').trim()) continue;
+      dataRows.push(r);
+    }
+    var latestRow = dataRows.length > 0 ? dataRows[dataRows.length - 1] : null;
+    var priorRow  = dataRows.length > 1 ? dataRows[dataRows.length - 2] : null;
+    return { hdr:hdr, idxMap:idxMap, latestRow:latestRow, priorRow:priorRow, dataRows:dataRows };
+  } catch(e) { console.warn('fetchCoachingOpsData error:', e); return null; }
+}
+
+function buildCoachingOpsContext(coaching) {
+  if (!coaching || !coaching.dataRows || !coaching.dataRows.length) return '';
+  var m = coaching.idxMap;
+  function v(row, key) { return row && m[key] >= 0 ? (row[m[key]] || '').trim() : ''; }
+  var latest = coaching.latestRow, prior = coaching.priorRow;
+  var out = ['=== proof3 Coaching Ops Metrics (live from Google Sheet) ===', ''];
+  if (latest) {
+    out.push('CURRENT MONTH (' + v(latest,'date') + '):');
+    out.push('  Client Count: '             + v(latest,'clientCount'));
+    if (prior) out.push('  Prior Month Clients: '      + v(prior,'clientCount'));
+    out.push('  Aggregate Client LTV: '     + v(latest,'aggregateLTV'));
+    out.push('  Monthly Clients Lost: '     + v(latest,'monthlyLost'));
+    out.push('  Monthly Retention %: '      + v(latest,'retentionPct'));
+    out.push('  3-Mo Avg Retention %: '     + v(latest,'retention3mo'));
+    out.push('  LoS - Current Clients: '    + v(latest,'losCurrentClients'));
+    out.push('  LoS - Historic Clients: '   + v(latest,'losHistoricClients'));
+    out.push('  LoS - All Clients: '        + v(latest,'losAllClients'));
+    out.push('  Avg Price Point: '          + v(latest,'avgPrice'));
+    out.push('  3-Mo Avg Price Point: '     + v(latest,'avgPrice3mo'));
+  }
+  out.push('');
+  out.push('ALL MONTHS (Date|Clients|LTV|Lost|Retention%|3Mo Ret%|LoS Current|LoS Historic|LoS All|Avg Price|3Mo Price):');
+  for (var i = 0; i < coaching.dataRows.length; i++) {
+    var r = coaching.dataRows[i];
+    out.push([v(r,'date'),v(r,'clientCount'),v(r,'aggregateLTV'),v(r,'monthlyLost'),
+              v(r,'retentionPct'),v(r,'retention3mo'),v(r,'losCurrentClients'),
+              v(r,'losHistoricClients'),v(r,'losAllClients'),v(r,'avgPrice'),v(r,'avgPrice3mo')].join('|'));
+  }
+  return out.join('\n');
+}
 /* === GENERATE === */
 async function generate() {
   if (isEditMode) {
@@ -981,11 +1072,14 @@ async function generate() {
   try {
     var sd = await fetchSheetData(currentType);
     /* Fetch operating metrics for p3spv type (and all entities if relevant) */
-    var opsData = null;
+    var opsData = null, coachingOpsData = null;
     if (currentType === 'p3spv' || currentType === 'all') {
-      opsData = await fetchOpsData();
+      var [opsResult, coachingResult] = await Promise.all([fetchOpsData(), fetchCoachingOpsData()]);
+      opsData = opsResult;
+      coachingOpsData = coachingResult;
       if (opsData) {
         populateOpsFields(opsData);
+        populateChartBuilderOpsMetrics(opsData);
       }
     }
     var sel = document.getElementById('dateRangePreset'), preset = sel ? sel.value : '12';
@@ -993,7 +1087,7 @@ async function generate() {
     var fLabel = getRangeLabel(preset, sd.earliestDate, sd.latestDate);
     showStatus('loading', 'Loaded ' + sd.rowCount + ' months. Calling Claude...');
     btn.innerHTML = '<span class="spinner"></span>Writing newsletter...';
-    var ctx = buildContext(), prompts = buildPrompts(currentType, sd, fTable, fLabel, ctx, opsData);
+    var ctx = buildContext(), prompts = buildPrompts(currentType, sd, fTable, fLabel, ctx, opsData, coachingOpsData);
     var resp = await fetch(WORKER_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ system: prompts.system, messages: [{ role: 'user', content: prompts.user }] })
@@ -1473,7 +1567,7 @@ function copyNewsletter()  { var t = getExportText(); if (!t) { showStatus('erro
 function exportToDoc()     { var t = getExportText(); if (!t) { showStatus('error','Nothing to export.'); return; } navigator.clipboard.writeText(t).then(function() { showStatus('success','Copied. Opening Google Docs.'); setTimeout(function() { window.open('https://docs.google.com/document/create','_blank'); }, 800); }).catch(function() { showStatus('error','Copy failed.'); }); }
 
 /* === PROMPT BUILDER === */
-function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData) {
+function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachingOpsData) {
   var cfg = SHEET_CONFIGS[type];
   var co  = CHART_OPEN, fc = FENCE_CLOSE;
   var audienceMap = {
@@ -1482,13 +1576,14 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData) {
   };
   var lines = [], g = ctx.gym;
   if (g.memberStory)        lines.push('Member story:\n' + g.memberStory);
-  if (g.target)             lines.push('Member target: ' + g.target);
-  if (ctx.coaching.clients) lines.push('Coaching clients: ' + ctx.coaching.clients);
+  if (g.gym1Target)         lines.push('Gym 1 member target: ' + g.gym1Target);
+  if (g.p3cTarget)          lines.push('p3 Coaching client target: ' + g.p3cTarget);
+  /* coaching clients now from sheet */
   if (ctx.portfolio)                lines.push('\nPortfolio company updates:\n' + ctx.portfolio);
   if (ctx.financialHighlights)      lines.push('\nFinancial highlights (use these to frame the numbers):\n' + ctx.financialHighlights);
   if (ctx.tshHighlights)            lines.push('\nTSH-specific highlights (TSH LLC, SHA, SHC):\n' + ctx.tshHighlights);
   if (ctx.p3Highlights)             lines.push('\nproof3-specific highlights (Training, Coaching, Gym 1):\n' + ctx.p3Highlights);
-  if (ctx.debt)                     lines.push('\nDebt/note structure:\n' + ctx.debt);
+  if (ctx.p3notes)                  lines.push('\nOther proof3 notes for investors:\n' + ctx.p3notes);
   if (ctx.unusual)                  lines.push('\nUnusual items (explain these in the newsletter):\n' + ctx.unusual);
   if (ctx.focus)                    lines.push('\nJim is focused on:\n' + ctx.focus);
   var opCtx = lines.join('\n');
@@ -1532,7 +1627,8 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData) {
     'FINANCIAL DATA (' + rangeLabel + ' — use this as the primary data source):\n' + filteredTable + '\n\n' +
     (sd.allTime !== filteredTable ? 'ALL-TIME DATA (use for inception-to-date trend charts only — do not default to this for recent analysis):\n' + sd.allTime + '\n\n' : '') +
     (opCtx ? 'CONTEXT THIS MONTH (treat this as ground truth — do not contradict it with data):\n' + opCtx + '\n\n' : 'No additional context provided.\n\n') +
-    (opsData ? 'OPERATING METRICS (all available months — use for member/coaching trends and current month counts):\n' + buildOpsContext(opsData) + '\n\n' : '') +
+    (opsData ? 'GYM OPERATING METRICS (from Google Sheet — use for gym member trends):\n' + buildOpsContext(opsData) + '\n\n' : '') +
+    (coachingOpsData ? 'COACHING OPERATING METRICS (from Google Sheet — use for coaching client trends):\n' + buildCoachingOpsContext(coachingOpsData) + '\n\n' : '') +
     'INSTRUCTIONS: Write the ' + cfg.label + ' newsletter. ' +
     'Use the financial data above. ' +
     'Include exactly 4 chart JSON blocks. ' +
@@ -2296,6 +2392,9 @@ function setupContextFieldPersistence() {
     saveTimer = setTimeout(saveContextFields, 600);
   });
 }
+
+
+
 
 
 
