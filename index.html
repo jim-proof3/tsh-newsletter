@@ -515,6 +515,7 @@
 
 
 
+
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
@@ -743,17 +744,18 @@ function switchTab(tab, el) {
   document.getElementById('newsletterTab').style.display = tab === 'newsletter' ? 'block' : 'none';
   document.getElementById('chartsTab').style.display     = tab === 'charts'     ? 'block' : 'none';
   if (tab === 'charts') {
-    /* If no sheet data cached (page restored from KV), fetch it now */
+    /* Always ensure tab data is loaded when Charts tab opens */
     if (!sheetDataCache && newsletters[currentType]) {
       fetchSheetData(currentType).then(function(sd) {
         if (sd) {
           sheetDataCache = sd;
           populateChartBuilderMetrics(sd, window._opsDataCache || null);
-          populateMultiTabChartBuilder();
           prefillChartBuilderDates(sd.allRows);
         }
       }).catch(function() {});
     }
+    /* Always try to populate multi-tab builder (idempotent after first load) */
+    if (!_multiTabPopulated) populateMultiTabChartBuilder();
     renderChartsTab();
   } else if (tab === 'newsletter') {
     /* Tab is now visible - render any pending inline charts */
@@ -1203,11 +1205,15 @@ function resolveMetricSel(selId) {
 
   /* New multi-tab format: tabId:colIdx */
   var parts = val.split(':');
-  if (parts.length === 2) {
-    var tabId = parts[0], colIdx = parseInt(parts[1], 10);
+  if (parts.length >= 2) {
+    var tabId = parts[0], colIdx = parseInt(parts[parts.length - 1], 10);
     var cached = _tabDataCache[tabId];
-    if (!cached) return null;
-    return { colIdx: colIdx, name: cached.hdr[colIdx] || 'Metric', sourceRows: cached.dataRows };
+    if (!cached) {
+      /* Tab not loaded yet - show helpful error */
+      showStatus('error', 'Sheet data still loading. Wait a moment and try again.');
+      return null;
+    }
+    return { colIdx: colIdx, name: (cached.hdr[colIdx] || 'Metric'), sourceRows: cached.dataRows };
   }
 
   /* Legacy financial: just a number */
@@ -1491,14 +1497,24 @@ async function shareNewsletter() {
     var content = body ? body.innerHTML : text;
     var resp = await fetch(WORKER_URL + '/newsletter', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: content, type: currentType, title: (cfg.label || 'Newsletter') + ' Newsletter' })
+      body: JSON.stringify({
+        text: content, type: currentType, charts: allCharts[currentType] || [],
+        title: (cfg.brand === 'proof3' ? 'proof3' : 'The SageHouse') + ' Investor Newsletter — ' +
+               new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      })
     });
     if (!resp.ok) throw new Error('Worker ' + resp.status);
     var result = await resp.json(); if (result.error) throw new Error(result.error);
     var shareUrl = window.location.origin + window.location.pathname + '?view=' + result.id + '&type=' + currentType;
+    /* Update OG meta for this share */
+    var ogTitle = document.getElementById('og-title');
+    var ogImg   = document.getElementById('og-image');
+    var brand   = cfg.brand || 'sagehouse';
+    if (ogTitle) ogTitle.setAttribute('content', (brand === 'proof3' ? 'proof3' : 'The SageHouse') + ' Investor Newsletter');
+    if (ogImg) ogImg.setAttribute('content', 'https://jim-proof3.github.io/tsh-newsletter/' + (brand === 'proof3' ? 'p3-logo.png' : 'sh-logo.png'));
     try {
       await navigator.clipboard.writeText(shareUrl);
-      showStatus('success', 'Link copied to clipboard: ' + shareUrl);
+      showStatus('success', 'Investor link copied: ' + shareUrl);
     } catch(clipErr) {
       /* Clipboard blocked - show URL in a visible prompt instead */
       window.prompt('Share link (copy this URL):', shareUrl);
@@ -1529,8 +1545,8 @@ async function shareNewsletter() {
   for (var d = 0; d < dividers.length; d++) dividers[d].style.display = 'none';
 
   /* Hide tabs - investor only sees newsletter, not chart builder */
-  var tabsDiv = document.querySelector('.top-bar-tabs');
-  if (tabsDiv) tabsDiv.style.display = 'none';
+  /* Keep Charts tab visible - investors can see charts */
+  /* Hide chart builder panel but keep the chart display */
 
   var picker = document.getElementById('chartPickerPanel');
   var editTb = document.getElementById('editToolbar');
@@ -1539,6 +1555,17 @@ async function shareNewsletter() {
   var type = params.get('type') || 'all';
   var cfg  = SHEET_CONFIGS[type] || { label:'Newsletter', brand:'sagehouse' };
   document.documentElement.setAttribute('data-brand', cfg.brand);
+  setFavicon(cfg.brand);
+  setTitle(type);
+  /* Add investor newsletter title to top bar */
+  var spacer = document.querySelector('.top-bar-spacer');
+  if (spacer) {
+    var titleEl = document.createElement('div');
+    titleEl.style.cssText = 'color:rgba(255,255,255,0.9);font-size:13px;font-weight:600;letter-spacing:0.3px;';
+    var brand = cfg.brand === 'proof3' ? 'proof3' : 'The SageHouse';
+    titleEl.textContent = brand + ' Investor Newsletter';
+    spacer.parentNode.insertBefore(titleEl, spacer);
+  }
   var lSH = document.getElementById('topBarLogoSH'), lP3 = document.getElementById('topBarLogoP3');
   if (lSH) lSH.style.display = cfg.brand === 'proof3' ? 'none' : 'block';
   if (lP3) lP3.style.display = cfg.brand === 'proof3' ? 'block' : 'none';
@@ -1552,6 +1579,15 @@ async function shareNewsletter() {
   var titleEl = document.getElementById('outputTitle'); if (titleEl) titleEl.textContent = cfg.label + ' Newsletter';
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('newsletterContent').style.display = 'block';
+  /* Hide chart builder controls - investors see charts but can't build */
+  var chartBuilderPanel = document.querySelector('.chart-builder-panel, [class*="chart-builder"]');
+  var builderDiv = document.getElementById('chartsTab');
+  if (builderDiv) {
+    /* Hide only the BUILD A CHART section, keep the chart grid */
+    var buildSection = builderDiv.querySelector('div[style*="border-radius:10px"]');
+    if (buildSection) buildSection.style.display = 'none';
+  }
+
   fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(viewId))
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -1825,7 +1861,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     '- When describing direction of change (up/down/dropped/grew), double-check: if the newer value is higher, it grew. If lower, it dropped.\n' +
     '- Expenses are always positive numbers. Net Operating Income can be positive or negative. Never confuse them in charts or text.\n' +
     '- If a value is zero or missing for early months (before an entity existed), acknowledge the entity was not yet operating.\n\n' +
-    'FORMAT: 600-700 words prose. No bullet lists. MUST begin with an H1 heading (# Month Year — Entity Name). Exactly 4 chart JSON blocks with descriptive titles. ' +
+    'FORMAT: 600-700 words prose. No bullet lists. MUST begin with an H1 heading (# Month Year — Entity Name). MUST include EXACTLY 4 chart JSON blocks — no more, no fewer. ' +
     '1-2 sentences before each chart explaining the so-what (not what the chart shows). Personal 2-3 sentence close.\n\n' +
     'CHART RULES - CRITICAL:\n' +
     '- Only use data explicitly in the tables. x-axis key must be "date". Allowed types: bar, line, area.\n' +
@@ -2353,10 +2389,13 @@ function renderCustomChartsGrid() {
   for (var e = 0; e < existing.length; e++) existing[e].parentNode.removeChild(existing[e]);
   if (!customCharts[currentType] || !customCharts[currentType].length) return;
   var sections = getSectionOptions();
-  var note = document.createElement('div');
-  note.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:10px;padding:8px;background:var(--bg);border-radius:6px;';
-  note.innerHTML = '<strong>To insert:</strong> pick a section from the dropdown, click Insert. <strong>To reposition:</strong> switch to Newsletter tab, enter Edit mode, then drag any chart.';
-  grid.appendChild(note);
+  /* Note: tip shown only when not in investor view */
+  if (!new URLSearchParams(window.location.search).get('view')) {
+    var note = document.createElement('div');
+    note.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:10px;padding:8px;background:var(--bg);border-radius:6px;';
+    note.innerHTML = '<strong>To insert:</strong> pick a section from the dropdown, click Insert. <strong>To reposition:</strong> switch to Newsletter tab, enter Edit mode, then drag any chart.';
+    grid.appendChild(note);
+  }
   var charts_cur = customCharts[currentType] || [];
   for (var i = 0; i < charts_cur.length; i++) {
     (function(chart, idx) { var customCharts_local = customCharts; var currentType_local = currentType;
@@ -2412,7 +2451,7 @@ function buildChartWrapper(chart) {
 }
 
 function insertChartAtSection(idx) {
-  var chart = customCharts[idx];
+  var chart = (customCharts[currentType] || [])[idx];
   if (!chart) return;
   var body = document.getElementById('newsletterBody');
   if (!body) { showStatus('error', 'Generate a newsletter first.'); return; }
@@ -2653,6 +2692,7 @@ function setupContextFieldPersistence() {
     saveTimer = setTimeout(saveContextFields, 600);
   });
 }
+
 
 
 
