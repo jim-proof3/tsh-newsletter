@@ -531,6 +531,7 @@
 
 
 
+
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
@@ -714,6 +715,7 @@ function setType(type, cardEl) {
   renderContextFields(currentType);
   restoreContextFields();
   setupContextFieldPersistence();
+  setFavicon((SHEET_CONFIGS[currentType]||{}).brand || 'sagehouse');
   restoreAutoSaves();
 })();
 
@@ -1863,6 +1865,7 @@ async function restoreAutoSaves() {
           allCharts[type] = extractCharts(mdForCharts);
           selectedCharts[type] = allCharts[type].slice();
           kvRestored.push((SHEET_CONFIGS[type]||{}).label || type);
+          setFavicon((SHEET_CONFIGS[type]||{}).brand || 'sagehouse');
           try { localStorage.setItem(AUTOSAVE_KEY_PREFIX + type, JSON.stringify({
             text: data.text, rawMarkdown: data.rawMarkdown || null,
             savedAt: data.savedAt, type: type,
@@ -2569,6 +2572,7 @@ function setupContextFieldPersistence() {
     saveTimer = setTimeout(saveContextFields, 600);
   });
 }
+
 
 
 
