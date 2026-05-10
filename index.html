@@ -513,6 +513,8 @@
 
 
 
+
+
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
@@ -1860,10 +1862,16 @@ var AUTOSAVE_KEY_PREFIX = 'sh_newsletter_autosave_';
 function autoSave(type, text) {
   if (!text) return;
   var cfg = SHEET_CONFIGS[type] || {};
-  var payload = { text: text, savedAt: new Date().toISOString(), type: type, label: cfg.label || type };
+  /* Always grab the current charts array for this type */
+  var chartsToStore = allCharts[type] || [];
+  var payload = {
+    text: text, savedAt: new Date().toISOString(),
+    type: type, label: cfg.label || type,
+    charts: chartsToStore
+  };
   /* localStorage */
   try { localStorage.setItem(AUTOSAVE_KEY_PREFIX + type, JSON.stringify(payload)); } catch(e) {}
-  /* KV - fire and forget, use fixed ID so it always overwrites the latest */
+  /* KV */
   try {
     fetch(WORKER_URL + '/newsletter', {
       method: 'POST',
@@ -1871,6 +1879,7 @@ function autoSave(type, text) {
       body: JSON.stringify({
         id:       AUTOSAVE_KV_ID[type],
         text:     text,
+        charts:   chartsToStore,
         type:     type,
         title:    (cfg.label || type) + ' Newsletter',
         autoSave: true
@@ -1902,9 +1911,12 @@ async function restoreAutoSaves() {
         var data = await resp.json();
         if (data && data.text && !data.error) {
           newsletters[type] = data.text;
-          /* Use rawMarkdown for chart extraction if available (HTML saves lose chart blocks) */
-          var mdForCharts = data.rawMarkdown || data.text;
-          allCharts[type] = extractCharts(mdForCharts);
+          /* Use stored charts array directly - most reliable, no markdown parsing needed */
+          if (data.charts && data.charts.length) {
+            allCharts[type] = data.charts;
+          } else {
+            allCharts[type] = extractCharts(data.text || '');
+          }
           selectedCharts[type] = allCharts[type].slice();
           kvRestored.push((SHEET_CONFIGS[type]||{}).label || type);
           setFavicon((SHEET_CONFIGS[type]||{}).brand || 'sagehouse');
@@ -1921,8 +1933,11 @@ async function restoreAutoSaves() {
       var saved = loadAutoSave(type);
       if (saved && saved.text) {
         newsletters[type] = saved.text;
-        var mdForCharts = saved.rawMarkdown || saved.text;
-        allCharts[type] = extractCharts(mdForCharts);
+        if (saved.charts && saved.charts.length) {
+          allCharts[type] = saved.charts;
+        } else {
+          allCharts[type] = extractCharts(saved.text || '');
+        }
         selectedCharts[type] = allCharts[type].slice();
         localRestored.push(saved.label || type);
       }
@@ -1933,7 +1948,19 @@ async function restoreAutoSaves() {
   if (allRestored.length > 0) {
     showNewsletterForType(currentType);
     var src = kvRestored.length > 0 ? ' (synced from cloud)' : ' (local)';
-    showStatus('success', 'Restored: ' + allRestored.join(', ') + src);
+    /* Warn if charts couldn't be restored (old save format without charts array) */
+    var missingCharts = [];
+    var types2 = ['all', 'p3spv'];
+    for (var mi = 0; mi < types2.length; mi++) {
+      if (newsletters[types2[mi]] && (!allCharts[types2[mi]] || !allCharts[types2[mi]].length)) {
+        missingCharts.push((SHEET_CONFIGS[types2[mi]]||{}).label || types2[mi]);
+      }
+    }
+    if (missingCharts.length) {
+      showStatus('loading', 'Restored: ' + allRestored.join(', ') + src + '. Charts need one regenerate to restore fully.');
+    } else {
+      showStatus('success', 'Restored: ' + allRestored.join(', ') + src);
+    }
   }
 }
 
@@ -2101,9 +2128,11 @@ async function loadCloudSave(id, type) {
     if (data.error) throw new Error(data.error);
     var t = type || data.type || currentType;
     newsletters[t] = data.text || '';
-    var mdForExtract = data.rawMarkdown || data.text || '';
-    allCharts[t] = extractCharts(mdForExtract);
-    if (data.rawMarkdown) _lastRawMarkdown[t] = data.rawMarkdown;
+    if (data.charts && data.charts.length) {
+      allCharts[t] = data.charts;
+    } else {
+      allCharts[t] = extractCharts(data.text || '');
+    }
     selectedCharts[t] = allCharts[t].slice();
     autoSave(t, data.text || '');
     var cards = document.querySelectorAll('[data-type="' + t + '"]');
@@ -2624,6 +2653,8 @@ function setupContextFieldPersistence() {
     saveTimer = setTimeout(saveContextFields, 600);
   });
 }
+
+
 
 
 
