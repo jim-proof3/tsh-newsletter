@@ -12,6 +12,8 @@
   <meta property="og:title"       id="og-title"       content="SageHouse Investor Newsletter">
   <meta property="og:description" id="og-description" content="Monthly investor update from The SageHouse.">
   <meta property="og:image"       id="og-image"       content="https://jim-proof3.github.io/tsh-newsletter/sh-logo.png">
+  <meta property="og:image:width"  content="200">
+  <meta property="og:image:height" content="200">
   <meta name="twitter:card" content="summary_large_image">
   <style>
     :root {
@@ -509,6 +511,8 @@
 
 
 
+
+
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
@@ -719,6 +723,11 @@ function showNewsletterForType(type) {
   document.getElementById('newsletterContent').style.display = 'block';
   var charts = selectedCharts[type].length ? selectedCharts[type] : allCharts[type];
   renderNewsletter(newsletters[type], charts);
+  /* Render charts immediately if newsletter tab is visible */
+  requestAnimationFrame(function() {
+    var nlTab = document.getElementById('newsletterTab');
+    if (nlTab && nlTab.style.display !== 'none') renderNewsletterCharts();
+  });
 }
 
 /* === TAB SWITCHING === */
@@ -1500,16 +1509,31 @@ async function shareNewsletter() {
 (function checkViewMode() {
   var params = new URLSearchParams(window.location.search);
   var viewId = params.get('view'); if (!viewId) return;
+
+  /* Hide all editor controls */
   var controls = document.querySelector('.controls');
   var app      = document.querySelector('.app');
-  var exportBar = document.querySelector('.export-bar');
-  var picker   = document.getElementById('chartPickerPanel');
-  var editTb   = document.getElementById('editToolbar');
   if (controls)  controls.style.display  = 'none';
   if (app)       app.style.gridTemplateColumns = '1fr';
-  if (exportBar) exportBar.style.display  = 'none';
-  if (picker)    picker.style.display     = 'none';
-  if (editTb)    editTb.style.display     = 'none';
+
+  /* Hide all action buttons in top bar - investors don't need these */
+  var actionBtns = document.querySelectorAll('.top-bar-actions');
+  for (var a = 0; a < actionBtns.length; a++) actionBtns[a].style.display = 'none';
+
+  /* Hide type switcher - investor only sees their newsletter */
+  var typeDiv = document.getElementById('topBarTypes');
+  if (typeDiv) typeDiv.style.display = 'none';
+  var dividers = document.querySelectorAll('.top-bar-divider');
+  for (var d = 0; d < dividers.length; d++) dividers[d].style.display = 'none';
+
+  /* Hide tabs - investor only sees newsletter, not chart builder */
+  var tabsDiv = document.querySelector('.top-bar-tabs');
+  if (tabsDiv) tabsDiv.style.display = 'none';
+
+  var picker = document.getElementById('chartPickerPanel');
+  var editTb = document.getElementById('editToolbar');
+  if (picker) picker.style.display = 'none';
+  if (editTb) editTb.style.display = 'none';
   var type = params.get('type') || 'all';
   var cfg  = SHEET_CONFIGS[type] || { label:'Newsletter', brand:'sagehouse' };
   document.documentElement.setAttribute('data-brand', cfg.brand);
@@ -1572,11 +1596,15 @@ function renderChartsTab() {
   var customList = customCharts[currentType] || [];
   for (var ci = 0; ci < customList.length; ci++) {
     (function(chart, idx) {
-      var card = document.createElement('div'); card.className = 'chart-card';
-      card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
-        '<div class="chart-card-title">' + chart.title + '</div>' +
+      var card = document.createElement('div');
+      card.className = 'chart-card'; card.setAttribute('data-custom-chart', idx);
+      card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div class="chart-card-title" style="font-size:13px;">' + chart.title + '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;">' +
+        '<button onclick="insertChartAtSection(' + idx + ')" style="padding:3px 10px;background:var(--primary);color:white;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700;">Insert →</button>' +
         '<button onclick="removeCustomChart(' + idx + ')" style="border:none;background:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0;">&#10005;</button>' +
-        '</div><canvas id="custom-tab-' + idx + '" height="220"></canvas>';
+        '</div></div>' +
+        '<canvas id="custom-tab-' + idx + '" height="200"></canvas>';
       grid.appendChild(card);
       setTimeout(function() { var c = document.getElementById('custom-tab-' + idx); if (c) renderSingleChart(c, chart); }, 60);
     })(customList[ci], ci);
@@ -1795,7 +1823,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     '- When describing direction of change (up/down/dropped/grew), double-check: if the newer value is higher, it grew. If lower, it dropped.\n' +
     '- Expenses are always positive numbers. Net Operating Income can be positive or negative. Never confuse them in charts or text.\n' +
     '- If a value is zero or missing for early months (before an entity existed), acknowledge the entity was not yet operating.\n\n' +
-    'FORMAT: 600-700 words prose. No bullet lists. Exactly 4 chart JSON blocks with descriptive titles. ' +
+    'FORMAT: 600-700 words prose. No bullet lists. MUST begin with an H1 heading (# Month Year — Entity Name). Exactly 4 chart JSON blocks with descriptive titles. ' +
     '1-2 sentences before each chart explaining the so-what (not what the chart shows). Personal 2-3 sentence close.\n\n' +
     'CHART RULES - CRITICAL:\n' +
     '- Only use data explicitly in the tables. x-axis key must be "date". Allowed types: bar, line, area.\n' +
@@ -2265,7 +2293,11 @@ function buildCustomChart() {
 
   if (!customCharts[currentType]) customCharts[currentType] = [];
   customCharts[currentType].push(chartDef);
-  renderCustomChartsGrid();
+  /* Re-render entire charts tab so new chart appears in correct grid position */
+  var chartsTab = document.getElementById('chartsTab');
+  if (chartsTab && chartsTab.style.display !== 'none') {
+    renderChartsTab();
+  }
   showStatus('success', 'Chart added: ' + title + ' (' + rows.length + ' months).');
 }
 
@@ -2285,9 +2317,11 @@ function getSectionOptions() {
 }
 
 function renderCustomChartsGrid() {
-  var grid = document.getElementById('chartsGrid'); /* append to main grid for proper 2-col layout */
+  /* Remove any previously appended custom chart cards (identified by data-custom attr) */
+  var grid = document.getElementById('chartsGrid');
   if (!grid) return;
-  grid.innerHTML = '';
+  var existing = grid.querySelectorAll('[data-custom-chart]');
+  for (var e = 0; e < existing.length; e++) existing[e].parentNode.removeChild(existing[e]);
   if (!customCharts[currentType] || !customCharts[currentType].length) return;
   var sections = getSectionOptions();
   var note = document.createElement('div');
@@ -2590,6 +2624,8 @@ function setupContextFieldPersistence() {
     saveTimer = setTimeout(saveContextFields, 600);
   });
 }
+
+
 
 
 
