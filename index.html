@@ -527,6 +527,7 @@
 
 
 
+
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
@@ -598,7 +599,8 @@ var isEditMode  = false;
 var BT = String.fromCharCode(96);
 var CHART_OPEN  = BT + BT + BT + 'chart';
 var FENCE_CLOSE = BT + BT + BT;
-var newsletters    = { all: null, p3spv: null };
+var newsletters       = { all: null, p3spv: null };
+var _lastRawMarkdown  = { all: null, p3spv: null };
 var allCharts      = { all: [],   p3spv: []   };
 var selectedCharts = { all: [],   p3spv: []   };
 
@@ -660,7 +662,7 @@ function setType(type, cardEl) {
     } else {
       /* save: commit edits then switch */
       var body = document.getElementById('newsletterBody');
-      if (body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); }
+      if (body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML, _lastRawMarkdown[currentType]); }
       isEditMode = false;
       var btn = document.getElementById('editToggleBtn'); if (btn) btn.textContent = 'Edit';
       var tb  = document.getElementById('editToolbar');  if (tb)  tb.classList.remove('visible');
@@ -1195,7 +1197,7 @@ async function generate() {
   if (isEditMode) {
     var body = document.getElementById('newsletterBody');
     var choice = confirm('You have unsaved edits. Save them before generating?\n\nOK = save edits first\nCancel = discard edits and generate');
-    if (choice && body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); }
+    if (choice && body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML, _lastRawMarkdown[currentType]); }
     isEditMode = false;
     if (body) { body.contentEditable = 'false'; body.style.outline = 'none'; body.style.cursor = 'default'; }
     var eb = document.getElementById('editToggleBtn'); if (eb) eb.textContent = 'Edit';
@@ -1233,7 +1235,8 @@ async function generate() {
     if (!result.content || !result.content[0]) throw new Error('Empty response');
     var text = result.content[0].text;
     newsletters[currentType]    = text;
-    autoSave(currentType, text);
+    _lastRawMarkdown[currentType] = text; /* preserve for chart re-extraction after edits */
+    autoSave(currentType, text, text); /* store text as both display and rawMarkdown */
     allCharts[currentType]      = extractCharts(text);
     selectedCharts[currentType] = allCharts[currentType].slice();
     populateChartBuilderMetrics(sd, opsData);
@@ -1300,7 +1303,7 @@ function toggleEdit() {
   if (btn) btn.textContent = isEditMode ? 'Done Editing' : 'Edit';
   if (tb) { if (isEditMode) tb.classList.add('visible'); else tb.classList.remove('visible'); }
   if (isEditMode) { showStatus('loading', 'Edit mode on. Drag charts to reorder. Use toolbar for headers.'); body.focus(); setupDragDrop(body); setupAllChartDragging(); updateTOC(); }
-  else { showStatus('success', 'Edits saved.'); newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); teardownDragDrop(body); }
+  else { showStatus('success', 'Edits saved.'); newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML, _lastRawMarkdown[currentType]); teardownDragDrop(body); }
 }
 
 /* === DRAG & DROP IMAGES === */
@@ -1836,11 +1839,16 @@ async function restoreAutoSaves() {
         var data = await resp.json();
         if (data && data.text && !data.error) {
           newsletters[type] = data.text;
-          allCharts[type] = extractCharts(data.text);
+          /* Use rawMarkdown for chart extraction if available (HTML saves lose chart blocks) */
+          var mdForCharts = data.rawMarkdown || data.text;
+          allCharts[type] = extractCharts(mdForCharts);
           selectedCharts[type] = allCharts[type].slice();
           kvRestored.push((SHEET_CONFIGS[type]||{}).label || type);
-          /* Also sync back to localStorage */
-          try { localStorage.setItem(AUTOSAVE_KEY_PREFIX + type, JSON.stringify({ text: data.text, savedAt: data.savedAt, type: type, label: (SHEET_CONFIGS[type]||{}).label || type })); } catch(e) {}
+          try { localStorage.setItem(AUTOSAVE_KEY_PREFIX + type, JSON.stringify({
+            text: data.text, rawMarkdown: data.rawMarkdown || null,
+            savedAt: data.savedAt, type: type,
+            label: (SHEET_CONFIGS[type]||{}).label || type
+          })); } catch(e) {}
         }
       }
     } catch(e) {
@@ -1848,7 +1856,8 @@ async function restoreAutoSaves() {
       var saved = loadAutoSave(type);
       if (saved && saved.text) {
         newsletters[type] = saved.text;
-        allCharts[type] = extractCharts(saved.text);
+        var mdForCharts = saved.rawMarkdown || saved.text;
+        allCharts[type] = extractCharts(mdForCharts);
         selectedCharts[type] = allCharts[type].slice();
         localRestored.push(saved.label || type);
       }
@@ -2027,7 +2036,9 @@ async function loadCloudSave(id, type) {
     if (data.error) throw new Error(data.error);
     var t = type || data.type || currentType;
     newsletters[t] = data.text || '';
-    allCharts[t] = extractCharts(data.text || '');
+    var mdForExtract = data.rawMarkdown || data.text || '';
+    allCharts[t] = extractCharts(mdForExtract);
+    if (data.rawMarkdown) _lastRawMarkdown[t] = data.rawMarkdown;
     selectedCharts[t] = allCharts[t].slice();
     autoSave(t, data.text || '');
     var cards = document.querySelectorAll('[data-type="' + t + '"]');
@@ -2341,7 +2352,7 @@ function insertChartAtSection(idx) {
 
   /* Auto-save the insertion */
   newsletters[currentType] = body.innerHTML;
-  autoSave(currentType, body.innerHTML);
+  autoSave(currentType, body.innerHTML, _lastRawMarkdown[currentType]);
 
   showStatus('success', 'Chart inserted. Enter Edit mode to drag it to a different position.');
 }
@@ -2539,6 +2550,7 @@ function setupContextFieldPersistence() {
     saveTimer = setTimeout(saveContextFields, 600);
   });
 }
+
 
 
 
