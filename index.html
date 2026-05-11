@@ -1553,7 +1553,7 @@ async function shareNewsletter() {
     var result = await resp.json();
     if (result.error) throw new Error(result.error);
 
-    var shareUrl = window.location.origin + window.location.pathname + '?view=' + kvId + '&type=' + currentType;
+    var shareUrl = WORKER_URL + '/view/' + kvId + '?type=' + currentType;
 
     /* Update OG meta */
     var ogTitle = document.getElementById('og-title');
