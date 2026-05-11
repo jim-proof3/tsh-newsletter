@@ -59,7 +59,7 @@
       --font-ui:      "DM Sans", Arial, sans-serif;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: var(--font-ui); background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
+    body { font-family: var(--font-ui); background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s;  overflow-x: hidden; }
     header { background: var(--header-bg); color: var(--header-text); padding: 0 28px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.25); transition: background 0.3s; }
     .logo-sh { height: 32px; object-fit: contain; display: block; mix-blend-mode: screen; }
     .logo-p3 { height: 28px; object-fit: contain; display: none; }
@@ -262,9 +262,9 @@
         
         /* Chart canvas background for dark proof3 theme */
         [data-brand="proof3"] .chart-embed,
-        [data-brand="proof3"] .chart-card { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.18); }
+        [data-brand="proof3"] .chart-card { background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.22); border-radius: 10px; }
         [data-brand="proof3"] .chart-embed-title,
-        [data-brand="proof3"] .chart-card-title { color: #ffffff; font-weight: 700; }
+        [data-brand="proof3"] .chart-card-title { color: #ffffff; font-weight: 700; font-size: 14px; }
         [data-brand="proof3"] .charts-grid .chart-card canvas,
         [data-brand="proof3"] .chart-embed canvas { background: transparent; }
         
@@ -272,28 +272,46 @@
         @media (max-width: 900px) {
           .app { grid-template-columns: 1fr !important; height: auto !important; }
           .controls { max-height: none; overflow-y: visible; border-right: none; border-bottom: 1px solid var(--border); }
-          .top-bar { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 6px; }
+          .top-bar { flex-wrap: wrap; height: auto; padding: 8px 10px; gap: 4px; }
           .top-bar-spacer { display: none; }
           .top-bar-actions { flex-wrap: wrap; }
           .top-bar-btn { padding: 4px 10px; font-size: 10px; }
           .top-bar-type-btn { padding: 4px 10px; font-size: 10px; }
           .top-tab-btn { padding: 4px 12px; font-size: 11px; }
           .top-bar-meta { display: none; }
-          .app-wrapper { margin-top: auto; }
+          .app-wrapper { margin-top: 0; padding-top: 0; }
           .charts-grid { grid-template-columns: 1fr !important; }
           .output { padding: 16px 12px; }
           .chart-embed canvas { height: 200px !important; }
         }
         @media (max-width: 600px) {
+          * { box-sizing: border-box; }
+          html, body { width: 100%; overflow-x: hidden; margin: 0; padding: 0; }
+          .top-bar { position: relative; }
+          .app-wrapper { margin-top: 0; }
           .top-bar-logo img { height: 24px; }
-          .top-bar-divider { margin: 0 8px; height: 20px; }
-          .top-bar-actions { gap: 3px; }
-          .top-bar-btn { padding: 3px 8px; font-size: 9px; }
+          .top-bar-divider { margin: 0 6px; height: 18px; }
+          .top-bar-actions { gap: 2px; width: 100%; justify-content: center; }
+          .top-bar-btn { padding: 3px 7px; font-size: 9px; }
+          .top-bar-type-btn { padding: 3px 8px; font-size: 9px; }
+          .top-tab-btn { padding: 3px 10px; font-size: 10px; }
           .controls { padding: 12px; }
           .panel-title { font-size: 10px; }
+          .output { padding: 12px 10px; max-width: 100vw; overflow-x: hidden; }
+          .chart-embed { margin: 12px 0; overflow: hidden; }
+          .chart-embed canvas { max-width: 100% !important; height: 180px !important; }
+          .newsletter-body { word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; }
+          .newsletter-body p, .newsletter-body h1, .newsletter-body h2, .newsletter-body h3 {
+            max-width: 100%; word-wrap: break-word;
+          }
+          #newsletterBody { max-width: 100%; overflow-x: hidden; padding: 0 2px; }
+          .chart-card { max-width: 100%; overflow: hidden; }
         }
         @media (min-width: 1400px) {
           .app { max-width: none; }
+          .output { padding: 28px 36px; }
+          .charts-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+        }
           .output { padding: 28px 36px; }
           .charts-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
         }
@@ -1711,9 +1729,10 @@ async function shareNewsletter() {
 function getColors() {
   var brand = document.documentElement.getAttribute('data-brand');
   return brand === 'proof3'
-    ? { primary:'#5cc8e8', secondary:'#f0a050', tertiary:'#90e0a0',
-        negative:'#ff7070', grid:'rgba(255,255,255,0.25)', text:'#ffffff',
-        chartBg:'rgba(255,255,255,0.04)', tooltipBg:'#1a2a3a' }
+    ? { primary:'#ffffff', secondary:'#ffb347', tertiary:'#7dffb3',
+        negative:'#ff6666', grid:'rgba(255,255,255,0.35)', text:'#ffffff',
+        chartBg:'rgba(255,255,255,0.06)', tooltipBg:'#0d1926',
+        borderWidth:3, pointRadius:4 }
     : { primary:'#13474A', secondary:'#C0632A', tertiary:'#4A6FA5',
         negative:'#C0392B', grid:'#dde8e0', text:'#303030',
         chartBg:'rgba(255,255,255,0.0)', tooltipBg:'#ffffff' };
@@ -1782,8 +1801,8 @@ function fmtTooltip(ctx) {
 
 function getSeriesColor(si, s, brand) {
   if (brand === 'proof3') {
-    /* Bright, high-contrast colors on dark navy background */
-    var p3palette = ['#5cc8e8', '#f0a050', '#90e0a0', '#e080c0'];
+    /* Maximum contrast on dark navy - white, orange, green, pink */
+    var p3palette = ['#ffffff', '#ffb347', '#7dffb3', '#ff85c0'];
     return s.color || p3palette[si % p3palette.length];
   }
   var shpalette = ['#13474A', '#C0632A', '#4A6FA5', '#89B9AB'];
@@ -1815,8 +1834,8 @@ function renderSingleChart(canvas, chart) {
       label: s.name, data: vals, yAxisID: 'y',
       backgroundColor: isBar ? vals.map(function(v) { return v < 0 ? colors.negative+'55' : color+'55'; }) : color+'33',
       borderColor:     isBar ? vals.map(function(v) { return v < 0 ? colors.negative        : color;       }) : color,
-      borderWidth: 2, fill: chart.type === 'area', tension: 0.35,
-      pointRadius: chart.data.length > 24 ? 1 : 3, pointHoverRadius: 5
+      borderWidth: colors.borderWidth || 2, fill: chart.type === 'area', tension: 0.35,
+      pointRadius: colors.pointRadius || (chart.data.length > 24 ? 1 : 3), pointHoverRadius: 6
     };
   });
 
