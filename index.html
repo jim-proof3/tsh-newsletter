@@ -315,6 +315,66 @@
           .output { padding: 28px 36px; }
           .charts-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
         }
+        
+        /* ── Investor View ── */
+        body.investor-view { margin:0; padding:0; }
+        body.investor-view .top-bar {
+          position:relative; height:auto; padding:16px 20px 12px;
+          flex-direction:column; align-items:flex-start; gap:8px;
+          box-shadow:0 1px 4px rgba(0,0,0,0.12);
+        }
+        body.investor-view .top-bar-tabs { margin-top:4px; }
+        body.investor-view .top-tab-btn { font-size:13px; padding:6px 18px; }
+        body.investor-view .top-tab-btn.active { background:rgba(255,255,255,0.22); border-radius:20px; }
+        body.investor-view .investor-title {
+          font-size:14px; color:rgba(255,255,255,0.75); font-weight:400; line-height:1.3;
+        }
+        body.investor-view .app-wrapper { margin-top:0; }
+        body.investor-view .app { height:auto; display:block; }
+        body.investor-view .output { max-width:720px; margin:0 auto; padding:32px 24px 60px; }
+        body.investor-view #newsletterBody { font-size:17px; line-height:1.75; }
+        body.investor-view #newsletterBody h1 {
+          font-size:26px; font-weight:700; margin:0 0 8px;
+          font-family:Georgia,serif; letter-spacing:-0.3px; line-height:1.25;
+        }
+        body.investor-view #newsletterBody h2 { font-size:20px; font-weight:700; margin:32px 0 8px; }
+        body.investor-view #newsletterBody p { margin:0 0 20px; }
+        body.investor-view .newsletter-toc {
+          background:transparent; border:none; border-left:3px solid var(--primary);
+          padding:12px 0 12px 16px; margin:0 0 32px; border-radius:0;
+        }
+        body.investor-view .newsletter-toc-title {
+          font-size:10px; text-transform:uppercase; letter-spacing:1.5px;
+          color:var(--muted); margin-bottom:6px; font-weight:700;
+        }
+        body.investor-view .newsletter-toc a { color:var(--primary); text-decoration:none; font-size:14px; display:block; padding:3px 0; }
+        body.investor-view .chart-embed {
+          background:var(--surface); border:1px solid var(--border);
+          border-radius:12px; padding:20px; margin:28px 0;
+          box-shadow:0 1px 3px rgba(0,0,0,0.04);
+        }
+        body.investor-view .chart-embed-title {
+          font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:12px;
+        }
+        body.investor-view[data-brand="proof3"] .newsletter-toc { border-left-color:#3d9cb5; }
+        body.investor-view[data-brand="proof3"] .newsletter-toc a { color:#7ddfff; }
+        body.investor-view[data-brand="proof3"] .chart-embed {
+          background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.14); box-shadow:0 2px 8px rgba(0,0,0,0.2);
+        }
+        body.investor-view[data-brand="proof3"] #newsletterBody { color:rgba(255,255,255,0.88); }
+        body.investor-view[data-brand="proof3"] #newsletterBody h1,
+        body.investor-view[data-brand="proof3"] #newsletterBody h2 { color:#ffffff; }
+        body.investor-view .charts-grid { max-width:720px; margin:0 auto; grid-template-columns:1fr !important; gap:20px; }
+        body.investor-view .chart-card { border-radius:12px; padding:20px; }
+        body.investor-view[data-brand="proof3"] .chart-card { box-shadow:0 2px 8px rgba(0,0,0,0.2); }
+        @media (max-width:600px) {
+          body.investor-view .output { padding:20px 16px 48px; }
+          body.investor-view #newsletterBody { font-size:16px; line-height:1.7; }
+          body.investor-view #newsletterBody h1 { font-size:22px; }
+          body.investor-view .chart-embed { padding:14px; margin:20px 0; }
+          body.investor-view .top-bar { padding:12px 14px 10px; }
+          body.investor-view .investor-title { font-size:12px; }
+        }
         </style>
   <link rel="icon" id="pageFavicon" type="image/png" href="data:image/png;base64,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"><rect width='32' height='32' rx='6' fill='%2313474A'/><text x='16' y='22' font-family='Georgia,serif' font-size='18' font-weight='bold' fill='%23F1CC6C' text-anchor='middle'>S</text></svg>">
   <link rel="alternate icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA">
@@ -1630,27 +1690,17 @@ async function shareNewsletter() {
 (function checkViewMode() {
   var params = new URLSearchParams(window.location.search);
   var viewId = params.get('view'); if (!viewId) return;
-
-  /* Hide all editor controls */
+  document.body.classList.add('investor-view');
   var controls = document.querySelector('.controls');
   var app      = document.querySelector('.app');
-  if (controls)  controls.style.display  = 'none';
-  if (app)       app.style.gridTemplateColumns = '1fr';
-
-  /* Hide all action buttons in top bar - investors don't need these */
+  if (controls) controls.style.display = 'none';
+  if (app) app.style.gridTemplateColumns = '1fr';
   var actionBtns = document.querySelectorAll('.top-bar-actions');
   for (var a = 0; a < actionBtns.length; a++) actionBtns[a].style.display = 'none';
-
-  /* Hide type switcher - investor only sees their newsletter */
   var typeDiv = document.getElementById('topBarTypes');
   if (typeDiv) typeDiv.style.display = 'none';
   var dividers = document.querySelectorAll('.top-bar-divider');
   for (var d = 0; d < dividers.length; d++) dividers[d].style.display = 'none';
-
-  /* Hide tabs - investor only sees newsletter, not chart builder */
-  /* Keep Charts tab visible - investors can see charts */
-  /* Hide chart builder panel but keep the chart display */
-
   var picker = document.getElementById('chartPickerPanel');
   var editTb = document.getElementById('editToolbar');
   if (picker) picker.style.display = 'none';
@@ -1658,50 +1708,36 @@ async function shareNewsletter() {
   var type = params.get('type') || 'all';
   var cfg  = SHEET_CONFIGS[type] || { label:'Newsletter', brand:'sagehouse' };
   document.documentElement.setAttribute('data-brand', cfg.brand);
+  document.body.setAttribute('data-brand', cfg.brand);
   setFavicon(cfg.brand);
   setTitle(type);
-  /* Add investor newsletter title placeholder - updated when data loads */
   var spacer = document.querySelector('.top-bar-spacer');
   var investorTitleEl = null;
   if (spacer) {
     investorTitleEl = document.createElement('div');
-    investorTitleEl.style.cssText = 'color:rgba(255,255,255,0.9);font-size:13px;font-weight:600;letter-spacing:0.3px;';
-    investorTitleEl.textContent = '';
+    investorTitleEl.className = 'investor-title';
     spacer.parentNode.insertBefore(investorTitleEl, spacer);
+    spacer.style.display = 'none';
   }
-  var lSH = document.getElementById('topBarLogoSH'), lP3 = document.getElementById('topBarLogoP3');
-  if (lSH) lSH.style.display = cfg.brand === 'proof3' ? 'none' : 'block';
-  if (lP3) lP3.style.display = cfg.brand === 'proof3' ? 'block' : 'none';
-  setFavicon(cfg.brand);
-  var ogImg   = document.getElementById('og-image');
-  var ogTitle = document.getElementById('og-title');
-  var ogDesc  = document.getElementById('og-description');
-  if (ogImg)   ogImg.setAttribute('content',  OG_IMAGES[cfg.brand] || OG_IMAGES.sagehouse);
-  if (ogTitle) ogTitle.setAttribute('content', cfg.label + ' Investor Newsletter');
-  if (ogDesc)  ogDesc.setAttribute('content',  'Monthly investor update from The SageHouse portfolio.');
-  var titleEl = document.getElementById('outputTitle'); if (titleEl) titleEl.textContent = cfg.label + ' Newsletter';
+  /* Hide chart builder section in Charts tab */
+  setTimeout(function() {
+    var chartsTab = document.getElementById('chartsTab');
+    if (chartsTab) {
+      var firstChild = chartsTab.children[0];
+      if (firstChild && firstChild.textContent.indexOf('BUILD') >= 0) firstChild.style.display = 'none';
+    }
+  }, 100);
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('newsletterContent').style.display = 'block';
-  /* Hide chart builder controls - investors see charts but can't build */
-  var chartBuilderPanel = document.querySelector('.chart-builder-panel, [class*="chart-builder"]');
-  var builderDiv = document.getElementById('chartsTab');
-  if (builderDiv) {
-    /* Hide only the BUILD A CHART section, keep the chart grid */
-    var buildSection = builderDiv.querySelector('div[style*="border-radius:10px"]');
-    if (buildSection) buildSection.style.display = 'none';
-  }
-
   fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(viewId))
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) throw new Error(data.error);
-      /* Set title from stored data */
-      if (investorTitleEl && data.title) investorTitleEl.textContent = data.title;
-      else if (investorTitleEl) {
-        var brandName = cfg.brand === 'proof3' ? 'proof3' : 'The SageHouse';
-        investorTitleEl.textContent = brandName + ' Investor Newsletter' + (data.monthLabel ? ' — ' + data.monthLabel : (data.name ? ' — ' + data.name : ''));
-      }
-      document.title = data.title || (cfg.brand === 'proof3' ? 'NL-p3' : 'NL-All');
+      var brandName = cfg.brand === 'proof3' ? 'proof3' : 'The SageHouse';
+      var monthStr = data.monthLabel || data.name || '';
+      var fullTitle = data.title || (brandName + ' Investor Newsletter' + (monthStr ? ' — ' + monthStr : ''));
+      if (investorTitleEl) investorTitleEl.textContent = fullTitle;
+      document.title = fullTitle;
       /* Render newsletter body */
       var body = document.getElementById('newsletterBody');
       if (body) { body.innerHTML = data.text || ''; }
