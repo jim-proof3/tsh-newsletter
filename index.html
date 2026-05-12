@@ -1,8 +1,5 @@
-<!DOCTdisp
-          <button onclick="execCmd('underline')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:underline;cursor:pointer;" title="Underline">U</button>
-          <button onclick="execCmd('strikeThrough')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:line-through;cursor:pointer;" title="Strikethrough">S</button>
-          <button onclick="execCmd('justifyCenter')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Center">C</button>
-          <button onclick="insertLink()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Insert link">&#128279;</button>lay:none;position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:150;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;max-width:720px;width:calc(100% - 380px);align-items:center;gap:6px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,0.12);"en" data-brand="sagehouse">
+<!DOCTYPE html>
+<html lang="en" data-brand="sagehouse">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -576,6 +573,10 @@
           <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
           <button onclick="execCmd('bold')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;">B</button>
           <button onclick="execCmd('italic')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-style:italic;cursor:pointer;">I</button>
+          <button onclick="execCmd('underline')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:underline;cursor:pointer;" title="Underline">U</button>
+          <button onclick="execCmd('strikeThrough')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:line-through;cursor:pointer;" title="Strikethrough">S</button>
+          <button onclick="execCmd('justifyCenter')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Center">C</button>
+          <button onclick="insertLink()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Insert link">&#128279;</button>
           <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
           <label style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;white-space:nowrap;">
             &#128247; Add Image
@@ -1441,8 +1442,18 @@ function resolveMetricSel(selId) {
     var tabId = parts[0], colIdx = parseInt(parts[parts.length - 1], 10);
     var cached = _tabDataCache[tabId];
     if (!cached) {
-      /* Tab not loaded yet - show helpful error */
-      showStatus('error', 'Sheet data still loading. Wait a moment and try again.');
+      /* Tab not loaded yet - try to fetch it synchronously-ish */
+      showStatus('loading', 'Loading tab data...');
+      /* Find the tab config */
+      var tabCfg = null;
+      for (var t = 0; t < CHART_BUILDER_TABS.length; t++) {
+        if (CHART_BUILDER_TABS[t].id === tabId) { tabCfg = CHART_BUILDER_TABS[t]; break; }
+      }
+      if (tabCfg) {
+        fetchTabData(tabCfg).then(function() {
+          showStatus('success', 'Tab loaded. Try adding the chart again.');
+        });
+      }
       return null;
     }
     return { colIdx: colIdx, name: (cached.hdr[colIdx] || 'Metric'), sourceRows: cached.dataRows };
@@ -2365,9 +2376,15 @@ async function restoreAutoSaves() {
     } else {
       showStatus('success', 'Restored: ' + allRestored.join(', ') + src);
     }
-    /* Pre-fetch sheet data so chart builder is ready when needed */
+    /* Pre-fetch sheet data + tab data so chart builder is ready when needed */
     fetchSheetData(currentType).then(function(sd) {
-      if (sd) { sheetDataCache = sd; }
+      if (sd) {
+        sheetDataCache = sd;
+        populateChartBuilderMetrics(sd, window._opsDataCache || null);
+        prefillChartBuilderDates(sd.allRows);
+        _multiTabPopulated = false;
+        populateMultiTabChartBuilder();
+      }
     }).catch(function() {});
   }
 }
@@ -2710,7 +2727,22 @@ function resolveMetricSel(selId) {
 }
 
 function buildCustomChart() {
-  if (!sheetDataCache && !window._opsDataCache) { showStatus('error', 'Generate a newsletter first to load sheet data.'); return; }
+  /* Auto-fetch sheet data if not loaded yet */
+  if (!sheetDataCache) {
+    showStatus('loading', 'Loading sheet data...');
+    fetchSheetData(currentType).then(function(sd) {
+      if (sd) {
+        sheetDataCache = sd;
+        populateChartBuilderMetrics(sd, window._opsDataCache || null);
+        _multiTabPopulated = false;
+        populateMultiTabChartBuilder();
+        showStatus('success', 'Sheet data loaded. Try adding the chart again.');
+      } else {
+        showStatus('error', 'Could not load sheet data.');
+      }
+    });
+    return;
+  }
   var ctype  = (document.getElementById('chartBuilderType') || {}).value || 'line';
   var sm = document.getElementById('chartBuilderStartMonth'), sy = document.getElementById('chartBuilderStartYear');
   var em = document.getElementById('chartBuilderEndMonth'),   ey = document.getElementById('chartBuilderEndYear');
