@@ -1780,7 +1780,12 @@ function renderNewsletter(text, charts) {
     var e = text.indexOf(FENCE_CLOSE, s + CHART_OPEN.length); if (e === -1) { html += mdToHtml(text.substring(pos)); break; }
     var chartTitle = (charts[ci] && charts[ci].title) ? charts[ci].title : ('Chart ' + (ci+1));
     var id = 'chart-inline-' + ci; ci++;
-    html += '<div class="chart-embed"><div class="chart-embed-title">' + chartTitle + '</div><canvas id="' + id + '" height="180"></canvas></div>';
+    html += '<div class="chart-embed" data-chart-index="' + _pendingInlineCharts.length + '">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+      '<div class="chart-embed-title">' + chartTitle + '</div>' +
+      '<button onclick="removeInlineChart(this)" style="border:none;background:var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;padding:2px 7px;border-radius:4px;" title="Remove chart">✕</button>' +
+      '</div>' +
+      '<canvas id="' + id + '" height="180"></canvas></div>';
     pos = e + FENCE_CLOSE.length;
   }
   /* Store charts for deferred render */
@@ -1976,6 +1981,28 @@ function getColors() {
         chartBg:'rgba(255,255,255,0.0)', tooltipBg:'#ffffff' };
 }
 
+
+function removeInlineChart(btn) {
+  var embed = btn.closest('.chart-embed');
+  if (!embed) return;
+  var idx = parseInt(embed.getAttribute('data-chart-index') || '0', 10);
+  embed.parentNode.removeChild(embed);
+  /* Remove from selectedCharts so it doesn't re-render */
+  if (_pendingInlineCharts && _pendingInlineCharts[idx]) {
+    var chart = _pendingInlineCharts[idx];
+    var sel = selectedCharts[currentType] || [];
+    var selIdx = sel.indexOf(chart);
+    if (selIdx >= 0) sel.splice(selIdx, 1);
+    /* Also remove from allCharts */
+    var ac = allCharts[currentType] || [];
+    var acIdx = ac.indexOf(chart);
+    if (acIdx >= 0) ac.splice(acIdx, 1);
+  }
+  /* Save */
+  var body = document.getElementById('newsletterBody');
+  if (body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); }
+  showStatus('success', 'Chart removed from newsletter.');
+}
 function removeGeneratedChart(idx) {
   var charts = allCharts[currentType];
   var selCharts = selectedCharts[currentType];
@@ -2927,7 +2954,7 @@ async function buildCustomChart() {
   var chartDef = {
     title: (isDual ? axisLabel1 + ' vs ' + axisLabel2 : m1.name).toUpperCase() +
            ' — ' + startKey.toUpperCase() + ' TO ' + endKey.toUpperCase(),
-    type: (ctype === 'multi' || ctype === 'dual') ? 'line' : ctype,
+    type: ctype,  /* keep 'dual' as 'dual' so renderDualAxisChart is triggered */
     data: s1.labels,
     series: [{ label: axisLabel1 || m1.name, values: s1.values }]
   };
