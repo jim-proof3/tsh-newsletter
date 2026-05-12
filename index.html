@@ -2813,8 +2813,18 @@ async function buildCustomChart() {
   function extractSeries(metric) {
     if (!metric) return { labels: [], values: [] };
     var labels = [], values = [];
-    var rangeStart = new Date('1 ' + startKey);
-    var rangeEnd   = new Date('1 ' + endKey);
+    var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function toDateKey(key) {
+      /* Convert "05 2023" to "May 2023", pass through "May 2023" unchanged */
+      var parts = key.split(' ');
+      if (parts.length === 2) {
+        var mn = parseInt(parts[0], 10);
+        if (!isNaN(mn) && mn >= 1 && mn <= 12) return MONTH_NAMES[mn-1] + ' ' + parts[1];
+      }
+      return key;
+    }
+    var rangeStart = new Date('1 ' + toDateKey(startKey));
+    var rangeEnd   = new Date('1 ' + toDateKey(endKey));
     /* Extend end to last day of month */
     rangeEnd.setMonth(rangeEnd.getMonth() + 1);
     rangeEnd.setDate(0);
@@ -2878,6 +2888,14 @@ async function buildCustomChart() {
 
   if (!customCharts[currentType]) customCharts[currentType] = [];
   customCharts[currentType].push(chartDef);
+  console.log('Chart created:', JSON.stringify({
+    title: chartDef.title,
+    type: chartDef.type,
+    dataPoints: chartDef.data ? chartDef.data.length : 0,
+    seriesCount: chartDef.series ? chartDef.series.length : 0,
+    firstLabel: chartDef.data ? chartDef.data[0] : null,
+    firstValue: chartDef.series && chartDef.series[0] ? chartDef.series[0].values[0] : null
+  }));
   /* Re-render entire charts tab so new chart appears in correct grid position */
   var chartsTab = document.getElementById('chartsTab');
   if (chartsTab && chartsTab.style.display !== 'none') {
