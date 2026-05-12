@@ -1971,6 +1971,35 @@ function getColors() {
         negative:'#C0392B', grid:'#dde8e0', text:'#303030',
         chartBg:'rgba(255,255,255,0.0)', tooltipBg:'#ffffff' };
 }
+
+function removeGeneratedChart(idx) {
+  var charts = allCharts[currentType];
+  var selCharts = selectedCharts[currentType];
+  if (!charts || idx >= charts.length) return;
+  /* Remove from both allCharts and selectedCharts */
+  var removed = charts.splice(idx, 1)[0];
+  if (selCharts) {
+    var selIdx = selCharts.indexOf(removed);
+    if (selIdx >= 0) selCharts.splice(selIdx, 1);
+  }
+  /* Also remove inline chart from newsletter body if present */
+  var body = document.getElementById('newsletterBody');
+  if (body) {
+    var embeds = body.querySelectorAll('.chart-embed');
+    for (var i = 0; i < embeds.length; i++) {
+      var titleEl = embeds[i].querySelector('.chart-embed-title');
+      if (titleEl && removed && titleEl.textContent.trim() === (removed.title || '').trim()) {
+        embeds[i].parentNode.removeChild(embeds[i]);
+        break;
+      }
+    }
+  }
+  /* Save updated charts */
+  autoSave(currentType, newsletters[currentType] || '', _lastRawMarkdown[currentType]);
+  /* Re-render charts tab */
+  renderChartsTab();
+  showStatus('success', 'Chart removed.');
+}
 function renderChartsTab() {
   var grid = document.getElementById('chartsGrid'), charts = allCharts[currentType] || [];
   /* Destroy tab chart instances */
@@ -1982,7 +2011,12 @@ function renderChartsTab() {
     (function(chart, idx) {
       var isSel = sel.indexOf(chart) >= 0;
       var card  = document.createElement('div'); card.className = 'chart-card'; card.style.opacity = isSel ? '1' : '0.45';
-      card.innerHTML = '<div class="chart-card-title">' + (chart.title || 'Chart ' + (idx+1)) + '</div><canvas id="chart-tab-' + idx + '" height="220"></canvas>';
+      card.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div class="chart-card-title" style="font-size:13px;">' + (chart.title || 'Chart ' + (idx+1)) + '</div>' +
+        '<button onclick="removeGeneratedChart(' + idx + ')" style="border:none;background:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0;flex-shrink:0;" title="Remove chart">✕</button>' +
+        '</div>' +
+        '<canvas id="chart-tab-' + idx + '" height="200"></canvas>';
       grid.appendChild(card);
       setTimeout(function() { var c = document.getElementById('chart-tab-' + idx); if (c) renderSingleChart(c, chart); }, 60);
     })(charts[i], i);
@@ -2074,7 +2108,7 @@ function renderSingleChart(canvas, chart) {
     }
     var isBar = chart.type === 'bar';
     return {
-      label: s.name, data: vals, yAxisID: 'y',
+      label: s.label || s.name || 'Series', data: vals, yAxisID: 'y',
       backgroundColor: isBar ? vals.map(function(v) { return v < 0 ? colors.negative+'55' : color+'55'; }) : color+'33',
       borderColor:     isBar ? vals.map(function(v) { return v < 0 ? colors.negative        : color;       }) : color,
       borderWidth: colors.borderWidth || 2, fill: chart.type === 'area', tension: 0.35,
@@ -2116,8 +2150,8 @@ function renderSingleChart(canvas, chart) {
 function renderDualAxisChart(canvas, chart, labels, colors, brand) {
   var s0 = chart.series[0], s1 = chart.series[1];
   var c0 = getSeriesColor(0, s0, brand), c1 = getSeriesColor(1, s1, brand);
-  var vals0 = chart.data.map(function(d) { return parseFloat(String(d[s0.key]||0).replace(/[$,%]/g,'')) || 0; });
-  var vals1 = chart.data.map(function(d) { return parseFloat(String(d[s1.key]||0).replace(/[$,%]/g,'')) || 0; });
+  var vals0 = s0.values && s0.values.length ? s0.values : chart.data.map(function(d) { return typeof d === 'string' ? 0 : parseFloat(String(d[s0.key]||0).replace(/[$,%]/g,'')) || 0; });
+  var vals1 = s1.values && s1.values.length ? s1.values : chart.data.map(function(d) { return typeof d === 'string' ? 0 : parseFloat(String(d[s1.key]||0).replace(/[$,%]/g,'')) || 0; });
 
   /* Determine bar vs line per series */
   var t0 = s0.chartType || 'bar';
@@ -2910,6 +2944,8 @@ async function buildCustomChart() {
 
   if (!customCharts[currentType]) customCharts[currentType] = [];
   customCharts[currentType].push(chartDef);
+  /* Save custom charts to localStorage immediately */
+  try { localStorage.setItem('sh_custom_charts_' + currentType, JSON.stringify(customCharts[currentType])); } catch(e) {}
 
   /* Re-render entire charts tab so new chart appears in correct grid position */
   var chartsTab = document.getElementById('chartsTab');
