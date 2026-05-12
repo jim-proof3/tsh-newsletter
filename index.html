@@ -2051,7 +2051,7 @@ function renderSingleChart(canvas, chart) {
 
   var colors = getColors();
   var brand  = document.documentElement.getAttribute('data-brand');
-  var labels = chart.data.map(function(d) { return d.date || d.month || ''; });
+  var labels = chart.data.map(function(d) { return (typeof d === 'string') ? d : (d.date || d.month || ''); });
   var chartType = chart.type === 'area' ? 'line' : (chart.type || 'bar');
 
   /* === DUAL Y-AXIS (type: 'dual') === */
@@ -2744,8 +2744,6 @@ function resolveMetricSel(selId) {
 async function buildCustomChart() {
   /* Debug */
   var dbgSel = document.getElementById('chartBuilderMetric');
-  console.log('buildCustomChart: sel value=', dbgSel ? dbgSel.value : 'NO_ELEMENT',
-    'sheetDataCache=', !!sheetDataCache, '_tabDataCache keys=', Object.keys(_tabDataCache));
   /* Ensure sheet data is loaded */
   if (!sheetDataCache) {
     showStatus('loading', 'Loading sheet data...');
@@ -2888,14 +2886,7 @@ async function buildCustomChart() {
 
   if (!customCharts[currentType]) customCharts[currentType] = [];
   customCharts[currentType].push(chartDef);
-  console.log('Chart created:', JSON.stringify({
-    title: chartDef.title,
-    type: chartDef.type,
-    dataPoints: chartDef.data ? chartDef.data.length : 0,
-    seriesCount: chartDef.series ? chartDef.series.length : 0,
-    firstLabel: chartDef.data ? chartDef.data[0] : null,
-    firstValue: chartDef.series && chartDef.series[0] ? chartDef.series[0].values[0] : null
-  }));
+
   /* Re-render entire charts tab so new chart appears in correct grid position */
   var chartsTab = document.getElementById('chartsTab');
   if (chartsTab && chartsTab.style.display !== 'none') {
@@ -2907,7 +2898,6 @@ async function buildCustomChart() {
 /* Async metric resolver — waits for tab data if needed */
 async function resolveMetricAsync(selId) {
   var sel = document.getElementById(selId);
-  console.log('resolveMetricAsync:', selId, 'value=', sel ? sel.value : 'NO_ELEMENT');
   if (!sel || !sel.value) return null;
   var val = sel.value;
 
