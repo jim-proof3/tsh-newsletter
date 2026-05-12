@@ -2742,6 +2742,10 @@ function resolveMetricSel(selId) {
 }
 
 async function buildCustomChart() {
+  /* Debug */
+  var dbgSel = document.getElementById('chartBuilderMetric');
+  console.log('buildCustomChart: sel value=', dbgSel ? dbgSel.value : 'NO_ELEMENT',
+    'sheetDataCache=', !!sheetDataCache, '_tabDataCache keys=', Object.keys(_tabDataCache));
   /* Ensure sheet data is loaded */
   if (!sheetDataCache) {
     showStatus('loading', 'Loading sheet data...');
@@ -2790,22 +2794,62 @@ async function buildCustomChart() {
   var axisLabel2 = label2El ? label2El.value.trim() : (m2 ? m2.name : '');
 
   /* Extract data within date range */
+  /* Parse various date formats */
+  function parseFlexDate(str) {
+    if (!str) return null;
+    str = str.trim();
+    /* Try standard Date parse first (handles "4/30/2026", "2026-04-30", etc.) */
+    var d = new Date(str);
+    if (!isNaN(d) && d.getFullYear() > 2000) return d;
+    /* Try "Mon YYYY" or "Month YYYY" */
+    var m2 = str.match(/^([A-Za-z]+)\s+(\d{4})$/);
+    if (m2) { d = new Date(m2[1] + ' 1, ' + m2[2]); if (!isNaN(d)) return d; }
+    /* Try "MM/YYYY" */
+    var m3 = str.match(/^(\d{1,2})\/(\d{4})$/);
+    if (m3) return new Date(parseInt(m3[2]), parseInt(m3[1]) - 1, 1);
+    return null;
+  }
+
   function extractSeries(metric) {
     if (!metric) return { labels: [], values: [] };
     var labels = [], values = [];
+    var rangeStart = new Date('1 ' + startKey);
+    var rangeEnd   = new Date('1 ' + endKey);
+    /* Extend end to last day of month */
+    rangeEnd.setMonth(rangeEnd.getMonth() + 1);
+    rangeEnd.setDate(0);
+
+    console.log('extractSeries: ' + metric.name + ', rows: ' + metric.sourceRows.length +
+      ', colIdx: ' + metric.colIdx + ', range: ' + startKey + ' to ' + endKey);
+    if (metric.sourceRows.length > 0) {
+      console.log('  First row col0: ' + (metric.sourceRows[0][0] || 'EMPTY') +
+        ', col[' + metric.colIdx + ']: ' + (metric.sourceRows[0][metric.colIdx] || 'EMPTY'));
+    }
+
     for (var i = 0; i < metric.sourceRows.length; i++) {
       var row = metric.sourceRows[i];
       var dateStr = (row[0] || '').trim();
       if (!dateStr) continue;
-      var d = new Date(dateStr);
-      if (isNaN(d)) continue;
-      var key = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      var d = parseFlexDate(dateStr);
+      if (!d) continue;
       /* Range filter */
-      var s = new Date('1 ' + startKey), e = new Date('1 ' + endKey);
-      if (d < s || d > e) continue;
+      if (d < rangeStart || d > rangeEnd) continue;
       labels.push(d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }));
-      var val = (row[metric.colIdx] || '').toString().replace(/[$,%]/g, '').trim();
-      values.push(parseFloat(val) || 0);
+      var rawVal = (row[metric.colIdx] || '').toString().replace(/[$,%\s]/g, '').trim();
+      /* Handle parenthesized negatives like (1234) */
+      if (rawVal.charAt(0) === '(' && rawVal.charAt(rawVal.length - 1) === ')') {
+        rawVal = '-' + rawVal.substring(1, rawVal.length - 1);
+      }
+      values.push(parseFloat(rawVal) || 0);
+    }
+
+    console.log('  Result: ' + labels.length + ' data points');
+    if (labels.length === 0 && metric.sourceRows.length > 0) {
+      console.log('  DEBUG: first 3 row dates:');
+      for (var j = 0; j < Math.min(3, metric.sourceRows.length); j++) {
+        var r = metric.sourceRows[j];
+        console.log('    row ' + j + ': col0="' + (r[0]||'') + '" parsed=' + parseFlexDate(r[0]||''));
+      }
     }
     return { labels: labels, values: values };
   }
@@ -2845,6 +2889,7 @@ async function buildCustomChart() {
 /* Async metric resolver — waits for tab data if needed */
 async function resolveMetricAsync(selId) {
   var sel = document.getElementById(selId);
+  console.log('resolveMetricAsync:', selId, 'value=', sel ? sel.value : 'NO_ELEMENT');
   if (!sel || !sel.value) return null;
   var val = sel.value;
 
