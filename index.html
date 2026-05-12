@@ -1,5 +1,8 @@
-<!DOCTYPE html>
-<html lang="en" data-brand="sagehouse">
+<!DOCTdisp
+          <button onclick="execCmd('underline')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:underline;cursor:pointer;" title="Underline">U</button>
+          <button onclick="execCmd('strikeThrough')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:line-through;cursor:pointer;" title="Strikethrough">S</button>
+          <button onclick="execCmd('justifyCenter')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Center">C</button>
+          <button onclick="insertLink()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Insert link">&#128279;</button>lay:none;position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:150;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;max-width:720px;width:calc(100% - 380px);align-items:center;gap:6px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,0.12);"en" data-brand="sagehouse">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -125,7 +128,7 @@
 
     /* Edit toolbar */
     #editToolbar { display: none; }
-    #editToolbar.visible { display: flex !important; }
+    #editToolbar.visible { display: flex !important; position: fixed !important; top: 52px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 150 !important; width: calc(100% - 400px) !important; max-width: 720px !important; }
 
     /* Table of contents */
     .newsletter-toc {
@@ -425,6 +428,14 @@
         }
         .saves-type-btn.active { background:var(--primary); color:white; border-color:var(--primary); }
         .saves-type-btn:hover { border-color:var(--primary); }
+        
+        @media (max-width: 900px) {
+          #editToolbar { width: calc(100% - 24px) !important; left: 12px !important; transform: none !important; }
+        }
+        
+        @media (max-width: 900px) {
+          #editToolbar { width: calc(100% - 24px) !important; left: 12px !important; transform: none !important; }
+        }
         </style>
   <link rel="icon" id="pageFavicon" type="image/png" href="data:image/png;base64,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"><rect width='32' height='32' rx='6' fill='%2313474A'/><text x='16' y='22' font-family='Georgia,serif' font-size='18' font-weight='bold' fill='%23F1CC6C' text-anchor='middle'>S</text></svg>">
   <link rel="alternate icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA">
@@ -679,7 +690,8 @@
   </main>
 </div>
 
-<script>
+<script>var _savedEditRange = null;
+
 
 
 
@@ -783,6 +795,7 @@ var currentType = 'all';
 var savedCursorRange = null;
 function saveCursorPosition() {
   var sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) { _savedEditRange = sel.getRangeAt(0).cloneRange(); }
   if (sel && sel.rangeCount > 0) {
     var body = document.getElementById('newsletterBody');
     if (body && body.contains(sel.anchorNode)) {
@@ -958,17 +971,22 @@ function switchTab(tab, el) {
   document.getElementById('newsletterTab').style.display = tab === 'newsletter' ? 'block' : 'none';
   document.getElementById('chartsTab').style.display     = tab === 'charts'     ? 'block' : 'none';
   if (tab === 'charts') {
-    /* Always ensure tab data is loaded when Charts tab opens */
-    if (!sheetDataCache && newsletters[currentType]) {
+    /* Always ensure sheet data + multi-tab data is loaded */
+    if (!sheetDataCache) {
+      var sel = document.getElementById('chartBuilderMetric');
+      if (sel && !sel.querySelector('option[value]')) {
+        sel.innerHTML = '<option value="">Loading sheet data...</option>';
+      }
       fetchSheetData(currentType).then(function(sd) {
         if (sd) {
           sheetDataCache = sd;
           populateChartBuilderMetrics(sd, window._opsDataCache || null);
           prefillChartBuilderDates(sd.allRows);
+          _multiTabPopulated = false;
+          populateMultiTabChartBuilder();
         }
       }).catch(function() {});
     }
-    /* Always try to populate multi-tab builder (idempotent after first load) */
     if (!_multiTabPopulated) populateMultiTabChartBuilder();
     renderChartsTab();
   } else if (tab === 'newsletter') {
@@ -1557,6 +1575,13 @@ function insertHeader(level) {
   updateTOC();
 }
 
+
+function insertLink() {
+  var url = prompt('Enter URL:');
+  if (!url || !url.trim()) return;
+  if (url.indexOf('http') !== 0) url = 'https://' + url;
+  document.execCommand('createLink', false, url);
+}
 function formatNormal() {
   var body = document.getElementById('newsletterBody'); if (!body || !isEditMode) return;
   document.execCommand('formatBlock', false, 'p');
@@ -1598,6 +1623,8 @@ function teardownDragDrop(body) {
 }
 function insertImage(input) { var f = input.files[0]; if (f) readAndInsertImage(f); input.value = ''; }
 function readAndInsertImage(file) {
+  /* Capture cursor position BEFORE async read (toolbar click may have moved focus) */
+  var savedRange = _savedEditRange;
   var reader = new FileReader();
   reader.onload = function(e) {
     var img = document.createElement('img'); img.src = e.target.result;
@@ -1614,16 +1641,17 @@ function readAndInsertImage(file) {
       '</div>';
     wrapper.appendChild(img);
     var body = document.getElementById('newsletterBody'); if (!body) return;
-    var sel = window.getSelection();
-    if (sel && sel.rangeCount > 0 && body.contains(sel.anchorNode)) {
+    /* Use saved cursor position from before toolbar click */
+    var range = savedRange;
+    if (range && body.contains(range.startContainer)) {
       var toc = document.getElementById('newsletter-toc');
-      if (toc && toc.contains(sel.anchorNode)) {
+      if (toc && toc.contains(range.startContainer)) {
         if (toc.nextSibling) body.insertBefore(wrapper, toc.nextSibling);
         else body.appendChild(wrapper);
       } else {
-        var range = sel.getRangeAt(0); range.collapse(false); range.insertNode(wrapper);
+        range.collapse(false); range.insertNode(wrapper);
         var after = document.createRange(); after.setStartAfter(wrapper); after.collapse(true);
-        sel.removeAllRanges(); sel.addRange(after);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(after);
       }
     } else {
       body.appendChild(wrapper);
@@ -2201,7 +2229,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     '- When describing direction of change (up/down/dropped/grew), double-check: if the newer value is higher, it grew. If lower, it dropped.\n' +
     '- Expenses are always positive numbers. Net Operating Income can be positive or negative. Never confuse them in charts or text.\n' +
     '- If a value is zero or missing for early months (before an entity existed), acknowledge the entity was not yet operating.\n\n' +
-    'FORMAT: 600-700 words prose. No bullet lists. MUST begin with an H1 heading (# Month Year — Entity Name). MUST include EXACTLY 4 chart JSON blocks — no more, no fewer. ' +
+    'FORMAT: 600-700 words prose. No bullet lists. MUST begin with an H1 heading (# Month Year — Entity Name). Use ## H2 headings for each major section (e.g. ## Financial Overview, ## Portfolio Updates, ## Coaching & Gym Operations, ## What Jim Is Focused On). MUST include EXACTLY 4 chart JSON blocks — no more, no fewer. ' +
     '1-2 sentences before each chart explaining the so-what (not what the chart shows). Personal 2-3 sentence close.\n\n' +
     'CHART RULES - CRITICAL:\n' +
     '- Only use data explicitly in the tables. x-axis key must be "date". Allowed types: bar, line, area.\n' +
@@ -2337,6 +2365,10 @@ async function restoreAutoSaves() {
     } else {
       showStatus('success', 'Restored: ' + allRestored.join(', ') + src);
     }
+    /* Pre-fetch sheet data so chart builder is ready when needed */
+    fetchSheetData(currentType).then(function(sd) {
+      if (sd) { sheetDataCache = sd; }
+    }).catch(function() {});
   }
 }
 
