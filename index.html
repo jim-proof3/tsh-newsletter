@@ -2062,7 +2062,16 @@ function renderSingleChart(canvas, chart) {
   /* === STANDARD SINGLE-AXIS (bar / line / area / multi) === */
   var datasets = chart.series.map(function(s, si) {
     var color = getSeriesColor(si, s, brand);
-    var vals  = chart.data.map(function(d) { return typeof d[s.key] === 'number' ? d[s.key] : (parseFloat(String(d[s.key]).replace(/[$,%]/g,'')) || 0); });
+    /* Support both new format (s.values array) and old format (d[s.key] row objects) */
+    var vals;
+    if (s.values && s.values.length) {
+      vals = s.values;
+    } else {
+      vals = chart.data.map(function(d) {
+        if (typeof d === 'string') return 0;
+        return typeof d[s.key] === 'number' ? d[s.key] : (parseFloat(String(d[s.key] || '').replace(/[$,%]/g,'')) || 0);
+      });
+    }
     var isBar = chart.type === 'bar';
     return {
       label: s.name, data: vals, yAxisID: 'y',
@@ -2827,12 +2836,7 @@ async function buildCustomChart() {
     rangeEnd.setMonth(rangeEnd.getMonth() + 1);
     rangeEnd.setDate(0);
 
-    console.log('extractSeries: ' + metric.name + ', rows: ' + metric.sourceRows.length +
-      ', colIdx: ' + metric.colIdx + ', range: ' + startKey + ' to ' + endKey);
-    if (metric.sourceRows.length > 0) {
-      console.log('  First row col0: ' + (metric.sourceRows[0][0] || 'EMPTY') +
-        ', col[' + metric.colIdx + ']: ' + (metric.sourceRows[0][metric.colIdx] || 'EMPTY'));
-    }
+
 
     for (var i = 0; i < metric.sourceRows.length; i++) {
       var row = metric.sourceRows[i];
@@ -2851,14 +2855,7 @@ async function buildCustomChart() {
       values.push(parseFloat(rawVal) || 0);
     }
 
-    console.log('  Result: ' + labels.length + ' data points');
-    if (labels.length === 0 && metric.sourceRows.length > 0) {
-      console.log('  DEBUG: first 3 row dates:');
-      for (var j = 0; j < Math.min(3, metric.sourceRows.length); j++) {
-        var r = metric.sourceRows[j];
-        console.log('    row ' + j + ': col0="' + (r[0]||'') + '" parsed=' + parseFlexDate(r[0]||''));
-      }
-    }
+
     return { labels: labels, values: values };
   }
 
