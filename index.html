@@ -2726,103 +2726,96 @@ function resolveMetricSel(selId) {
   return { colIdx: colIdx, name: name, sourceRows: sourceRows, isOps: isOps };
 }
 
-function buildCustomChart() {
-  /* Auto-fetch sheet data if not loaded yet */
+async function buildCustomChart() {
+  /* Ensure sheet data is loaded */
   if (!sheetDataCache) {
     showStatus('loading', 'Loading sheet data...');
-    fetchSheetData(currentType).then(function(sd) {
+    try {
+      var sd = await fetchSheetData(currentType);
       if (sd) {
         sheetDataCache = sd;
         populateChartBuilderMetrics(sd, window._opsDataCache || null);
+        prefillChartBuilderDates(sd.allRows);
         _multiTabPopulated = false;
-        populateMultiTabChartBuilder();
-        showStatus('success', 'Sheet data loaded. Try adding the chart again.');
-      } else {
-        showStatus('error', 'Could not load sheet data.');
+        await populateMultiTabChartBuilder();
       }
-    });
-    return;
+    } catch(e) {}
   }
+  /* Ensure multi-tab data is loaded */
+  if (!_multiTabPopulated) {
+    await populateMultiTabChartBuilder();
+  }
+
   var ctype  = (document.getElementById('chartBuilderType') || {}).value || 'line';
   var sm = document.getElementById('chartBuilderStartMonth'), sy = document.getElementById('chartBuilderStartYear');
   var em = document.getElementById('chartBuilderEndMonth'),   ey = document.getElementById('chartBuilderEndYear');
-  var startV = (sm && sy && sm.value && sy.value) ? sy.value + '-' + sm.value : '';
-  var endV   = (em && ey && em.value && ey.value) ? ey.value + '-' + em.value : '';
 
-  /* Resolve primary metric */
-  var m1 = resolveMetricSel('chartBuilderMetric');
-  if (!m1) { showStatus('error', 'Select at least one metric.'); return; }
-  var m2 = (ctype === 'multi' || ctype === 'dual') ? resolveMetricSel('chartBuilderMetric2') : null;
-  var m3 = (ctype === 'multi') ? resolveMetricSel('chartBuilderMetric3') : null;
+  /* Resolve metrics — auto-fetch tab data if missing */
+  var m1 = await resolveMetricAsync('chartBuilderMetric');
+  if (!m1) { showStatus('error', 'Please select at least one metric.'); return; }
 
-  /* Use primary source rows; filter by date */
-  var sourceRows = m1.sourceRows;
-  if (!sourceRows.length) { showStatus('error', 'No data loaded for this metric.'); return; }
-  var rows = sourceRows;
-  if (startV || endV) {
-    var sd = startV ? new Date(startV + '-01') : null;
-    var ed = endV   ? new Date(endV   + '-01') : null;
-    rows = rows.filter(function(row) {
-      var d = parseRowDate(row[0]);
-      if (!d) return false;
-      if (sd && d < sd) return false;
-      if (ed && d > ed) return false;
-      return true;
-    });
+  var m2 = null, m3 = null;
+  var isDual = ctype === 'dual';
+  var isMulti = ctype === 'multi';
+  if (isDual || isMulti) {
+    m2 = await resolveMetricAsync('chartBuilderMetric2');
   }
-  if (!rows.length) { showStatus('error', 'No data in selected date range.'); return; }
-
-  /* Apply date filter */
-  if (startV || endV) {
-    var sd2 = startV ? new Date(startV + '-01') : null;
-    var ed2 = endV   ? new Date(endV   + '-01') : null;
-    rows = rows.filter(function(row) {
-      var d = parseRowDate(row[0]);
-      if (!d) return false;
-      if (sd2 && d < sd2) return false;
-      if (ed2 && d > ed2) return false;
-      return true;
-    });
-  }
-  if (!rows.length) { showStatus('error', 'No data in selected date range.'); return; }
-
-  /* Build date labels + data points */
-  var colors = getColors();
-  function makeLabel(row) {
-    var d = parseRowDate(row[0] || '');
-    return d ? (['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + String(d.getFullYear()).slice(2)) : (row[0] || '');
-  }
-  function makeVal(row, colIdx) {
-    return parseFloat(String(row[colIdx] || '').replace(/[$,%]/g, '')) || 0;
+  if (isMulti) {
+    m3 = await resolveMetricAsync('chartBuilderMetric3');
   }
 
-  var data = rows.map(function(row) {
-    var pt = { date: makeLabel(row), v1: makeVal(row, m1.colIdx) };
-    if (m2) pt.v2 = makeVal(row, m2.colIdx);
-    if (m3) pt.v3 = makeVal(row, m3.colIdx);
-    return pt;
-  });
+  /* Build date range */
+  var startKey = (sm ? sm.value : 'Jan') + ' ' + (sy ? sy.value : '2024');
+  var endKey   = (em ? em.value : 'Dec') + ' ' + (ey ? ey.value : '2026');
 
-  /* Build series array */
-  var series = [{ key: 'v1', name: m1.name, color: colors.primary }];
-  if (m2) series.push({ key: 'v2', name: m2.name, color: colors.secondary,
-    chartType: ctype === 'dual' ? 'line' : undefined,
-    axisLabel: ctype === 'dual' ? (document.getElementById('chartBuilderAxis2Label')||{}).value || '' : undefined });
-  if (m3) series.push({ key: 'v3', name: m3.name, color: '#DB9452' });
+  /* Get axis labels */
+  var label1El = document.getElementById('chartBuilderLabel1');
+  var label2El = document.getElementById('chartBuilderLabel2');
+  var axisLabel1 = label1El ? label1El.value.trim() : m1.name;
+  var axisLabel2 = label2El ? label2El.value.trim() : (m2 ? m2.name : '');
 
-  /* For dual: attach left axis label to series 0 */
-  if (ctype === 'dual') {
-    series[0].axisLabel = (document.getElementById('chartBuilderAxis1Label')||{}).value || '';
+  /* Extract data within date range */
+  function extractSeries(metric) {
+    if (!metric) return { labels: [], values: [] };
+    var labels = [], values = [];
+    for (var i = 0; i < metric.sourceRows.length; i++) {
+      var row = metric.sourceRows[i];
+      var dateStr = (row[0] || '').trim();
+      if (!dateStr) continue;
+      var d = new Date(dateStr);
+      if (isNaN(d)) continue;
+      var key = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      /* Range filter */
+      var s = new Date('1 ' + startKey), e = new Date('1 ' + endKey);
+      if (d < s || d > e) continue;
+      labels.push(d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }));
+      var val = (row[metric.colIdx] || '').toString().replace(/[$,%]/g, '').trim();
+      values.push(parseFloat(val) || 0);
+    }
+    return { labels: labels, values: values };
   }
 
-  var title = m1.name + (m2 ? ' vs ' + m2.name : '') + (m3 ? ' & ' + m3.name : '');
+  var s1 = extractSeries(m1);
+  if (!s1.labels.length) { showStatus('error', 'No data found for the selected date range.'); return; }
+
   var chartDef = {
-    type:   ctype === 'multi' ? 'line' : ctype,
-    title:  title,
-    data:   data,
-    series: series,
-    custom: true
+    title: (isDual ? axisLabel1 + ' vs ' + axisLabel2 : m1.name).toUpperCase() +
+           ' — ' + startKey.toUpperCase() + ' TO ' + endKey.toUpperCase(),
+    type: (ctype === 'multi' || ctype === 'dual') ? 'line' : ctype,
+    data: s1.labels,
+    series: [{ label: axisLabel1 || m1.name, values: s1.values }]
   };
+
+  if (m2) {
+    var s2 = extractSeries(m2);
+    chartDef.series.push({ label: axisLabel2 || m2.name, values: s2.values });
+  }
+  if (m3) {
+    var s3 = extractSeries(m3);
+    var label3El = document.getElementById('chartBuilderLabel3');
+    chartDef.series.push({ label: (label3El ? label3El.value.trim() : m3.name), values: s3.values });
+  }
+  if (isDual) chartDef.dualAxis = true;
 
   if (!customCharts[currentType]) customCharts[currentType] = [];
   customCharts[currentType].push(chartDef);
@@ -2831,7 +2824,49 @@ function buildCustomChart() {
   if (chartsTab && chartsTab.style.display !== 'none') {
     renderChartsTab();
   }
-  showStatus('success', 'Chart added: ' + title + ' (' + rows.length + ' months).');
+  showStatus('success', 'Chart added: ' + chartDef.title);
+}
+
+/* Async metric resolver — waits for tab data if needed */
+async function resolveMetricAsync(selId) {
+  var sel = document.getElementById(selId);
+  if (!sel || !sel.value) return null;
+  var val = sel.value;
+
+  /* Legacy ops format */
+  if (val.indexOf('ops:') === 0) {
+    var ci = parseInt(val.replace('ops:', ''), 10);
+    var ops = window._opsDataCache;
+    if (!ops) return null;
+    return { colIdx: ci, name: ops.hdr[ci] || 'Metric', sourceRows: ops.dataRows };
+  }
+
+  /* Multi-tab format: tabId:colIdx */
+  var parts = val.split(':');
+  if (parts.length >= 2) {
+    var tabId = parts[0], colIdx = parseInt(parts[parts.length - 1], 10);
+    var cached = _tabDataCache[tabId];
+    if (!cached) {
+      /* Tab not loaded — fetch it now and wait */
+      var tabCfg = null;
+      for (var t = 0; t < CHART_BUILDER_TABS.length; t++) {
+        if (CHART_BUILDER_TABS[t].id === tabId) { tabCfg = CHART_BUILDER_TABS[t]; break; }
+      }
+      if (tabCfg) {
+        showStatus('loading', 'Loading ' + tabCfg.label + '...');
+        cached = await fetchTabData(tabCfg);
+      }
+      if (!cached) return null;
+    }
+    return { colIdx: colIdx, name: (cached.hdr[colIdx] || 'Metric'), sourceRows: cached.dataRows };
+  }
+
+  /* Legacy financial: just a number */
+  var colIdx2 = parseInt(val, 10);
+  if (!isNaN(colIdx2) && sheetDataCache) {
+    return { colIdx: colIdx2, name: sheetDataCache.hdr[colIdx2] || 'Metric', sourceRows: sheetDataCache.allRows };
+  }
+  return null;
 }
 
 function getSectionOptions() {
