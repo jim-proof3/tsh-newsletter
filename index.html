@@ -601,12 +601,13 @@
           <div id="savesList"></div>
         </div>
         <!-- Chart picker panel -->
-        <div id="chartPickerPanel" style="display:none;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:720px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Select Charts to Display</div>
-            <button onclick="applyChartSelection()" style="padding:6px 14px;background:var(--primary);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Apply</button>
+        <div id="chartPickerPanel" style="display:none;position:fixed;top:48px;right:80px;width:340px;max-height:75vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:0 0 12px 12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);z-index:250;padding:0;">
+          <div style="padding:12px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);margin-bottom:0;">
+            <span style="font-size:13px;font-weight:700;">Charts</span>
+            <button onclick="toggleChartPicker()" style="border:none;background:none;font-size:16px;cursor:pointer;color:var(--muted);">&#10005;</button>
           </div>
-          <div id="chartPickerList" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <div style="font-size:10px;color:var(--muted);padding:8px 16px 4px;">Check to include in newsletter</div>
+          <div id="chartPickerList" style="padding:0 16px 16px;display:flex;flex-direction:column;gap:0;"></div>
         </div>
       </div>
     </div>
@@ -2150,55 +2151,52 @@ function renderSingleChart(canvas, chart) {
 function renderDualAxisChart(canvas, chart, labels, colors, brand) {
   var s0 = chart.series[0], s1 = chart.series[1];
   var c0 = getSeriesColor(0, s0, brand), c1 = getSeriesColor(1, s1, brand);
-  var vals0 = s0.values && s0.values.length ? s0.values : chart.data.map(function(d) { return typeof d === 'string' ? 0 : parseFloat(String(d[s0.key]||0).replace(/[$,%]/g,'')) || 0; });
-  var vals1 = s1.values && s1.values.length ? s1.values : chart.data.map(function(d) { return typeof d === 'string' ? 0 : parseFloat(String(d[s1.key]||0).replace(/[$,%]/g,'')) || 0; });
-
-  /* Determine bar vs line per series */
-  var t0 = s0.chartType || 'bar';
-  var t1 = s1.chartType || 'line';
-
-  var datasets = [
-    {
-      label: s0.name, data: vals0, yAxisID: 'y',
-      type: t0,
-      backgroundColor: t0==='bar' ? vals0.map(function(v){return v<0?colors.negative+'55':c0+'55';}) : c0+'33',
-      borderColor:     t0==='bar' ? vals0.map(function(v){return v<0?colors.negative:c0;}) : c0,
-      borderWidth:2, fill:false, tension:0.35,
-      pointRadius:chart.data.length>24?1:3, pointHoverRadius:5
-    },
-    {
-      label: s1.name, data: vals1, yAxisID: 'y2',
-      type: t1,
-      backgroundColor: t1==='bar' ? vals1.map(function(v){return v<0?colors.negative+'55':c1+'55';}) : c1+'33',
-      borderColor:     t1==='bar' ? vals1.map(function(v){return v<0?colors.negative:c1;}) : c1,
-      borderWidth:2, fill:false, tension:0.35,
-      pointRadius:chart.data.length>24?1:3, pointHoverRadius:5
-    }
-  ];
-
+  var vals0 = s0.values && s0.values.length ? s0.values :
+    chart.data.map(function(d) { return typeof d === 'string' ? 0 : parseFloat(String(d[s0.key]||0).replace(/[$,%]/g,'')) || 0; });
+  var vals1 = s1.values && s1.values.length ? s1.values :
+    chart.data.map(function(d) { return typeof d === 'string' ? 0 : parseFloat(String(d[s1.key]||0).replace(/[$,%]/g,'')) || 0; });
+  var label0 = s0.label || s0.name || s0.key || 'Series 1';
+  var label1 = s1.label || s1.name || s1.key || 'Series 2';
+  var fmtTick = function(v) { return v >= 1000 || v <= -1000 ? '$' + (v/1000).toFixed(0) + 'k' : '$' + v; };
   try {
-    var instance = new Chart(canvas, {
-      type: 'bar',  /* outer type; each dataset overrides */
-      data: { labels: labels, datasets: datasets },
+    return new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: label0, data: vals0, yAxisID: 'y',
+            borderColor: c0, backgroundColor: c0 + '22',
+            borderWidth: colors.borderWidth || 2, fill: false, tension: 0.35,
+            pointRadius: labels.length > 24 ? 1 : 3, pointHoverRadius: 6 },
+          { label: label1, data: vals1, yAxisID: 'y1',
+            borderColor: c1, backgroundColor: c1 + '22',
+            borderWidth: colors.borderWidth || 2, fill: false, tension: 0.35,
+            pointRadius: labels.length > 24 ? 1 : 3, pointHoverRadius: 6 }
+        ]
+      },
       options: {
         responsive: true,
         plugins: {
-          legend: { display: true, position: 'bottom', labels: { font:{size:10}, boxWidth:10, padding:10, color:colors.text } },
-          tooltip: { callbacks: { label: fmtTooltip } }
+          legend: { display: true, position: 'bottom',
+            labels: { font:{size:10}, boxWidth:10, padding:10, color: colors.text } },
+          tooltip: { backgroundColor: colors.tooltipBg || '#fff',
+            titleColor: colors.text, bodyColor: colors.text }
         },
         scales: {
-          y:  { position:'left',  grid:{color:colors.grid}, ticks:{color:c0, font:{size:10}, callback:fmtTick}, title:{display:!!(s0.axisLabel), text:s0.axisLabel||'', color:c0, font:{size:10}} },
-          y2: { position:'right', grid:{drawOnChartArea:false}, ticks:{color:c1, font:{size:10}, callback:fmtTick}, title:{display:!!(s1.axisLabel), text:s1.axisLabel||'', color:c1, font:{size:10}} },
-          x:  { grid:{display:false}, ticks:{color:colors.text, font:{size:9}, maxTicksLimit:chart.data.length>24?12:24, maxRotation:45} }
+          y:  { position: 'left',  grid: { color: colors.grid },
+                ticks: { color: colors.text, font:{size:10}, callback: fmtTick },
+                title: { display: true, text: label0, color: colors.text, font:{size:10} } },
+          y1: { position: 'right', grid: { drawOnChartArea: false },
+                ticks: { color: c1, font:{size:10}, callback: fmtTick },
+                title: { display: true, text: label1, color: c1, font:{size:10} } },
+          x:  { grid: { display: false },
+                ticks: { color: colors.text, font:{size:9}, maxTicksLimit: labels.length > 24 ? 12 : 24, maxRotation: 45 } }
         }
       }
     });
-    _chartRegistry[canvas.id] = instance;
-    return instance;
-  } catch(e) { console.error('Dual axis chart error:', e); return null; }
+  } catch(e) { console.warn('Dual axis chart error:', e); return null; }
 }
 
-/* === EXPORT === */
 function stripCharts(text) {
   var result = '', pos = 0;
   while (true) {
@@ -3131,12 +3129,58 @@ function insertChartAtSection(idx) {
 }
 
 /* === TOGGLE PANELS === */
+
+function refreshChartPicker() {
+  var listEl = document.getElementById('chartPickerList');
+  if (!listEl) return;
+  var all = allCharts[currentType] || [];
+  var custom = customCharts[currentType] || [];
+  var sel = selectedCharts[currentType] || [];
+  var allCombined = all.concat(custom);
+  if (!allCombined.length) {
+    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0;">No charts yet. Generate a newsletter to create charts.</div>';
+    return;
+  }
+  var html = '<div style="font-size:10px;color:var(--muted);margin-bottom:8px;">Click to add/remove from newsletter</div>';
+  for (var i = 0; i < allCombined.length; i++) {
+    var chart = allCombined[i];
+    var isSelected = sel.indexOf(chart) >= 0;
+    var isCustom = i >= all.length;
+    var label = isCustom ? '[Custom] ' : '';
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="toggleChartInNewsletter(' + i + ')">' +
+      '<div style="width:16px;height:16px;border-radius:3px;border:2px solid var(--primary);background:' + (isSelected ? 'var(--primary)' : 'transparent') + ';flex-shrink:0;display:flex;align-items:center;justify-content:center;">' +
+      (isSelected ? '<span style="color:white;font-size:10px;font-weight:700;">✓</span>' : '') + '</div>' +
+      '<div style="font-size:11px;line-height:1.3;">' + label + (chart.title || 'Chart ' + (i+1)) + '</div>' +
+      '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+function toggleChartInNewsletter(idx) {
+  var all = allCharts[currentType] || [];
+  var custom = customCharts[currentType] || [];
+  var allCombined = all.concat(custom);
+  var chart = allCombined[idx];
+  if (!chart) return;
+  var sel = selectedCharts[currentType] || [];
+  var selIdx = sel.indexOf(chart);
+  if (selIdx >= 0) {
+    sel.splice(selIdx, 1);
+  } else {
+    sel.push(chart);
+  }
+  selectedCharts[currentType] = sel;
+  refreshChartPicker();
+  /* Update newsletter body */
+  showNewsletterForType(currentType);
+}
 function toggleChartPicker() {
   var panel = document.getElementById('chartPickerPanel');
   var btn   = document.getElementById('chartPickerBtn');
   var isOpen = panel && panel.style.display !== 'none';
   if (panel) panel.style.display = isOpen ? 'none' : 'block';
   if (btn)   btn.classList.toggle('active', !isOpen);
+  if (!isOpen) { refreshChartPicker(); }
   if (!isOpen) {
     var charts = allCharts[currentType] || [];
     if (!charts.length) { showStatus('error', 'Generate a newsletter first.'); panel.style.display = 'none'; btn.classList.remove('active'); return; }
