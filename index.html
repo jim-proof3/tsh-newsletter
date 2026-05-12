@@ -2320,86 +2320,93 @@ function showSavesPanel() {
 async function refreshSavesPanel() {
   var listEl = document.getElementById('savesList');
   if (!listEl) return;
-  listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0;">Loading...</div>';
+  listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:12px 0;">Loading saves from cloud...</div>';
+
+  var sH = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--primary);margin:18px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--border);';
+  var sH2 = 'font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:12px 0 6px;';
+  var row = 'display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);';
+  var bP = 'padding:3px 8px;border:1px solid var(--primary);border-radius:4px;background:transparent;color:var(--primary);font-size:10px;cursor:pointer;';
+  var bM = 'padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:10px;cursor:pointer;';
+
+  function fmtDate(d) { return d ? new Date(d).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : ''; }
+
+  /* Fetch ALL saves from Cloudflare KV */
+  var saves = [];
+  try {
+    var resp = await fetch(WORKER_URL + '/newsletter/list');
+    if (resp.ok) {
+      var data = await resp.json();
+      saves = data.saves || [];
+    }
+  } catch(e) { console.log('Could not fetch saves list:', e); }
+
+  /* Categorize saves */
+  var allShares  = saves.filter(function(s) { return s.type === 'all'   && s.id.indexOf('monthly-') === 0; });
+  var p3Shares   = saves.filter(function(s) { return s.type === 'p3spv' && s.id.indexOf('monthly-') === 0; });
+  var allDrafts  = saves.filter(function(s) { return s.type === 'all'   && s.saveType === 'draft'; });
+  var p3Drafts   = saves.filter(function(s) { return s.type === 'p3spv' && s.saveType === 'draft'; });
+  var autoAll    = saves.filter(function(s) { return s.id === AUTOSAVE_KV_ID['all']; });
+  var autoP3     = saves.filter(function(s) { return s.id === AUTOSAVE_KV_ID['p3spv']; });
+
   var html = '';
-  var sectionStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:16px 0 8px;';
-  var rowStyle = 'display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);';
-  var btnPrimary = 'padding:4px 10px;border:1px solid var(--primary);border-radius:4px;background:transparent;color:var(--primary);font-size:11px;cursor:pointer;';
-  var btnMuted = 'padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;';
 
-  /* ── Section 1: Latest Auto-Save Per Type ── */
-  html += '<div style="' + sectionStyle + '">Latest Draft (auto-saved)</div>';
-  var types = ['all', 'p3spv'];
-  for (var i = 0; i < types.length; i++) {
-    var type = types[i], label = (SHEET_CONFIGS[type]||{}).label || type, dt = '';
-    try {
-      var r = await fetch(WORKER_URL + '/newsletter?id=' + AUTOSAVE_KV_ID[type]);
-      if (r.ok) { var d = await r.json(); if (d && d.savedAt && !d.error) dt = new Date(d.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
-    } catch(e) {}
-    if (!dt) { var ls = loadAutoSave(type); if (ls && ls.savedAt) dt = new Date(ls.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
-    if (dt) {
-      html += '<div style="' + rowStyle + '"><div><div style="font-size:12px;font-weight:600;">' + label + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);">Saved ' + dt + '</div></div>' +
-        '<button onclick="loadCloudSave(\'' + AUTOSAVE_KV_ID[type] + '\', \'' + type + '\')" style="' + btnPrimary + '">Load</button></div>';
-    }
+  function renderRow(s, showLink) {
+    var dt = fmtDate(s.savedAt);
+    var displayName = s.name || s.monthLabel || s.title || s.id;
+    var type = s.type || 'all';
+    var h = '<div style="' + row + '"><div style="flex:1;min-width:0;">' +
+      '<div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + displayName + '</div>' +
+      (dt ? '<div style="font-size:10px;color:var(--muted);">' + dt + '</div>' : '') +
+      '</div><div style="display:flex;gap:3px;flex-shrink:0;">' +
+      '<button onclick="loadCloudSave(\'' + s.id + '\', \'' + type + '\')" style="' + bP + '">Load</button>';
+    if (showLink) h += '<button onclick="copyShareLink(\'' + s.id + '\', \'' + type + '\')" style="' + bM + '">Link</button>';
+    h += '<button onclick="deleteNamedSave(\'' + s.id + '\', \'' + type + '\')" style="' + bM + '">Del</button>';
+    h += '</div></div>';
+    return h;
   }
 
-  /* ── Section 2: Monthly Shared Newsletters ── */
-  var refs = getCloudSaveRefs();
-  var allShares = refs.filter(function(r) { return r.id && r.id.indexOf('monthly-all') === 0; });
-  var p3Shares  = refs.filter(function(r) { return r.id && r.id.indexOf('monthly-p3spv') === 0; });
-  var otherSaves = refs.filter(function(r) { return !r.id || r.id.indexOf('monthly-') !== 0; });
-
+  /* ══ SHARED INVESTOR LINKS ══ */
+  html += '<div style="' + sH + '">Shared Investor Links</div>';
   if (allShares.length > 0) {
-    html += '<div style="' + sectionStyle + '">All Entities — Shared Newsletters</div>';
-    for (var a = 0; a < allShares.length; a++) {
-      var ref = allShares[a];
-      var dt2 = ref.savedAt ? new Date(ref.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
-      html += '<div style="' + rowStyle + '"><div>' +
-        '<div style="font-size:12px;font-weight:600;">' + (ref.name || ref.id) + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);">' + (dt2 ? 'Shared ' + dt2 : '') + '</div></div>' +
-        '<div style="display:flex;gap:4px;">' +
-        '<button onclick="loadCloudSave(\'' + ref.id + '\', \'all\')" style="' + btnPrimary + '">Load</button>' +
-        '<button onclick="copyShareLink(\'' + ref.id + '\', \'all\')" style="' + btnMuted + '" title="Copy investor link">Link</button>' +
-        '<button onclick="deleteNamedSave(\'' + ref.id + '\', \'all\')" style="' + btnMuted + '">Delete</button>' +
-        '</div></div>';
-    }
+    html += '<div style="' + sH2 + '">All Entities</div>';
+    for (var i = 0; i < allShares.length; i++) html += renderRow(allShares[i], true);
   }
-
   if (p3Shares.length > 0) {
-    html += '<div style="' + sectionStyle + '">proof3 + SPV1 — Shared Newsletters</div>';
-    for (var p = 0; p < p3Shares.length; p++) {
-      var ref2 = p3Shares[p];
-      var dt3 = ref2.savedAt ? new Date(ref2.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
-      html += '<div style="' + rowStyle + '"><div>' +
-        '<div style="font-size:12px;font-weight:600;">' + (ref2.name || ref2.id) + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);">' + (dt3 ? 'Shared ' + dt3 : '') + '</div></div>' +
-        '<div style="display:flex;gap:4px;">' +
-        '<button onclick="loadCloudSave(\'' + ref2.id + '\', \'p3spv\')" style="' + btnPrimary + '">Load</button>' +
-        '<button onclick="copyShareLink(\'' + ref2.id + '\', \'p3spv\')" style="' + btnMuted + '" title="Copy investor link">Link</button>' +
-        '<button onclick="deleteNamedSave(\'' + ref2.id + '\', \'p3spv\')" style="' + btnMuted + '">Delete</button>' +
-        '</div></div>';
-    }
+    html += '<div style="' + sH2 + '">proof3 + SPV1</div>';
+    for (var i = 0; i < p3Shares.length; i++) html += renderRow(p3Shares[i], true);
+  }
+  if (allShares.length === 0 && p3Shares.length === 0) {
+    html += '<div style="font-size:12px;color:var(--muted);padding:6px 0;">No shared newsletters yet. Click Share to create investor links.</div>';
   }
 
-  if (otherSaves.length > 0) {
-    html += '<div style="' + sectionStyle + '">Other Saves</div>';
-    for (var o = 0; o < otherSaves.length; o++) {
-      var ref3 = otherSaves[o];
-      var dt4 = ref3.savedAt ? new Date(ref3.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
-      html += '<div style="' + rowStyle + '"><div>' +
-        '<div style="font-size:12px;font-weight:600;">' + (ref3.name || ref3.title || ref3.id) + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);">' + (dt4 ? 'Saved ' + dt4 : '') + '</div></div>' +
-        '<div style="display:flex;gap:4px;">' +
-        '<button onclick="loadCloudSave(\'' + ref3.id + '\', \'' + (ref3.type||'all') + '\')" style="' + btnPrimary + '">Load</button>' +
-        '<button onclick="deleteNamedSave(\'' + ref3.id + '\', \'' + (ref3.type||'all') + '\')" style="' + btnMuted + '">Delete</button>' +
-        '</div></div>';
-    }
+  /* ══ SAVED DRAFTS ══ */
+  html += '<div style="' + sH + '">Saved Drafts</div>';
+  if (allDrafts.length > 0) {
+    html += '<div style="' + sH2 + '">All Entities</div>';
+    for (var i = 0; i < allDrafts.length; i++) html += renderRow(allDrafts[i], false);
+  }
+  if (p3Drafts.length > 0) {
+    html += '<div style="' + sH2 + '">proof3 + SPV1</div>';
+    for (var i = 0; i < p3Drafts.length; i++) html += renderRow(p3Drafts[i], false);
+  }
+  if (allDrafts.length === 0 && p3Drafts.length === 0) {
+    html += '<div style="font-size:12px;color:var(--muted);padding:6px 0;">No saved drafts. Click Save to create named versions.</div>';
   }
 
-  if (refs.length === 0) {
-    html += '<div style="' + sectionStyle + '">Shared Newsletters</div>';
-    html += '<div style="font-size:12px;color:var(--muted);padding:8px 0;">No shared newsletters yet. Generate a newsletter and click Share to create one.</div>';
+  /* ══ LATEST AUTO-SAVES ══ */
+  html += '<div style="' + sH + '">Latest Auto-Save</div>';
+  if (autoAll.length > 0) {
+    html += '<div style="' + row + '"><div><div style="font-size:12px;font-weight:600;">All Entities</div>' +
+      '<div style="font-size:10px;color:var(--muted);">Auto-saved ' + fmtDate(autoAll[0].savedAt) + '</div></div>' +
+      '<button onclick="loadCloudSave(\'' + AUTOSAVE_KV_ID['all'] + '\', \'all\')" style="' + bP + '">Load</button></div>';
+  }
+  if (autoP3.length > 0) {
+    html += '<div style="' + row + '"><div><div style="font-size:12px;font-weight:600;">proof3 + SPV1</div>' +
+      '<div style="font-size:10px;color:var(--muted);">Auto-saved ' + fmtDate(autoP3[0].savedAt) + '</div></div>' +
+      '<button onclick="loadCloudSave(\'' + AUTOSAVE_KV_ID['p3spv'] + '\', \'p3spv\')" style="' + bP + '">Load</button></div>';
+  }
+  if (autoAll.length === 0 && autoP3.length === 0) {
+    html += '<div style="font-size:12px;color:var(--muted);padding:6px 0;">No auto-saves found. Generate a newsletter to create one.</div>';
   }
 
   listEl.innerHTML = html;
