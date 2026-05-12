@@ -1845,14 +1845,15 @@ async function shareNewsletter() {
     var resp = await fetch(WORKER_URL + '/newsletter', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id:       kvId,
-        text:     content,
-        charts:   allCharts[currentType] || [],
-        type:     currentType,
-        title:    brand + ' Investor Newsletter — ' + monthLabel,
-        name:     monthLabel,
-        named:    true,
-        monthLabel: monthLabel
+        id:           kvId,
+        text:         content,
+        charts:       allCharts[currentType] || [],
+        customCharts: customCharts[currentType] || [],
+        type:         currentType,
+        title:        brand + ' Investor Newsletter — ' + monthLabel,
+        name:         monthLabel,
+        named:        true,
+        monthLabel:   monthLabel
       })
     });
     if (!resp.ok) throw new Error('Worker ' + resp.status);
@@ -1953,19 +1954,37 @@ async function shareNewsletter() {
       if (investorTitleEl) investorTitleEl.textContent = fullTitle;
       document.title = fullTitle;
       /* Render newsletter body */
-      var body = document.getElementById('newsletterBody');
-      if (body) { body.innerHTML = data.text || ''; }
+      var nlBody = document.getElementById('newsletterBody');
+      if (nlBody) { nlBody.innerHTML = data.text || ''; }
+      newsletters[type] = data.text || '';
       /* Load charts if stored */
       if (data.charts && data.charts.length) {
         allCharts[type] = data.charts;
         selectedCharts[type] = data.charts.slice();
-        newsletters[type] = data.text || '';
       }
-      /* Render inline charts after DOM paint */
+      if (data.customCharts && data.customCharts.length) {
+        customCharts[type] = data.customCharts;
+      }
+      /* Rebuild _pendingInlineCharts from allCharts+customCharts for re-rendering */
+      var allForRender = (allCharts[type] || []).concat(customCharts[type] || []);
+      _pendingInlineCharts = allForRender;
+      /* Re-render canvases inside the newsletter HTML */
       requestAnimationFrame(function() {
         requestAnimationFrame(function() {
           updateTOC();
-          renderNewsletterCharts();
+          /* Find all chart-embed canvases and re-render them by index */
+          var embeds = document.querySelectorAll('.chart-embed canvas');
+          for (var ei = 0; ei < embeds.length; ei++) {
+            (function(canvas, idx) {
+              var chart = allForRender[idx];
+              if (chart && canvas) {
+                destroyChart(canvas.id);
+                setTimeout(function() { renderSingleChart(canvas, chart); }, 80 * idx);
+              }
+            })(embeds[ei], ei);
+          }
+          /* Also render charts tab */
+          renderChartsTab();
         });
       });
     })
