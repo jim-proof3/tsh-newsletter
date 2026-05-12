@@ -2306,7 +2306,8 @@ function autoSave(type, text) {
   var payload = {
     text: text, savedAt: new Date().toISOString(),
     type: type, label: cfg.label || type,
-    charts: chartsToStore
+    charts: chartsToStore,
+    customCharts: customCharts[type] || []
   };
   /* localStorage */
   try { localStorage.setItem(AUTOSAVE_KEY_PREFIX + type, JSON.stringify(payload)); } catch(e) {}
@@ -2316,12 +2317,13 @@ function autoSave(type, text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id:       AUTOSAVE_KV_ID[type],
-        text:     text,
-        charts:   chartsToStore,
-        type:     type,
-        title:    (cfg.label || type) + ' Newsletter',
-        autoSave: true
+        id:           AUTOSAVE_KV_ID[type],
+        text:         text,
+        charts:       chartsToStore,
+        customCharts: customCharts[type] || [],
+        type:         type,
+        title:        (cfg.label || type) + ' Newsletter',
+        autoSave:     true
       })
     }).catch(function(e) { console.warn('KV auto-save failed:', e); });
   } catch(e) {}
@@ -2357,6 +2359,9 @@ async function restoreAutoSaves() {
             allCharts[type] = extractCharts(data.text || '');
           }
           selectedCharts[type] = allCharts[type].slice();
+          if (data.customCharts && data.customCharts.length) {
+            customCharts[type] = data.customCharts;
+          }
           kvRestored.push((SHEET_CONFIGS[type]||{}).label || type);
           setFavicon((SHEET_CONFIGS[type]||{}).brand || 'sagehouse');
           setTitle(type);
@@ -2378,6 +2383,9 @@ async function restoreAutoSaves() {
           allCharts[type] = extractCharts(saved.text || '');
         }
         selectedCharts[type] = allCharts[type].slice();
+        if (saved.customCharts && saved.customCharts.length) {
+          customCharts[type] = saved.customCharts;
+        }
         localRestored.push(saved.label || type);
       }
     }
@@ -2407,9 +2415,28 @@ async function restoreAutoSaves() {
         populateChartBuilderMetrics(sd, window._opsDataCache || null);
         prefillChartBuilderDates(sd.allRows);
         _multiTabPopulated = false;
+        /* Populate multi-tab async — done in background */
         populateMultiTabChartBuilder();
       }
     }).catch(function() {});
+    /* Pre-fetch all chart builder tabs in background after 2s */
+    setTimeout(function() {
+      for (var _ti = 0; _ti < CHART_BUILDER_TABS.length; _ti++) {
+        (function(tab) {
+          if (!tab.gid || tab.gid.indexOf('PENDING') === 0 || tab.gid.indexOf('WRONG') === 0) return;
+          fetchTabData(tab).catch(function() {});
+        })(CHART_BUILDER_TABS[_ti]);
+      }
+    }, 2000);
+    /* Also pre-fetch all tab data in background so it's ready when user opens chart builder */
+    setTimeout(function() {
+      for (var t = 0; t < CHART_BUILDER_TABS.length; t++) {
+        (function(tab) {
+          if (!tab.gid || tab.gid.indexOf('PENDING') === 0 || tab.gid.indexOf('WRONG') === 0) return;
+          fetchTabData(tab).catch(function() {});
+        })(CHART_BUILDER_TABS[t]);
+      }
+    }, 2000); /* 2s delay so restore completes first */
   }
 }
 
