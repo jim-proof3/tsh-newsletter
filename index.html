@@ -1,5 +1,4 @@
-<!DOCTYPE ht
-          <button onclick="formatNormal()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;" title="Normal paragraph">P</button>ml>
+<!DOCTYPE html>
 <html lang="en" data-brand="sagehouse">
 <head>
   <meta charset="UTF-8">
@@ -332,7 +331,18 @@
         }
         body.investor-view .app-wrapper { margin-top:0; }
         body.investor-view .app { height:auto; display:block; }
-        body.investor-view .output { max-width:720px; margin:0 auto; padding:32px 24px 60px; }
+        body.investor-view .output { max-width:720px; margin:0 auto; padding:32px 24px 60px; transition: max-width 0.3s; }
+        body.investor-view.wide-view .output { max-width:1100px; }
+        body.investor-view.wide-view .charts-grid { max-width:1100px; grid-template-columns: 1fr 1fr !important; }
+        .view-toggle-btn {
+          position:fixed; bottom:20px; right:20px; z-index:300;
+          padding:8px 16px; border-radius:20px; border:1px solid rgba(255,255,255,0.3);
+          background:var(--primary); color:white; font-size:12px; font-weight:600;
+          cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2);
+          transition: all 0.2s;
+        }
+        .view-toggle-btn:hover { background:var(--primary); border-color:white; transform:scale(1.05); }
+        [data-brand="proof3"] .view-toggle-btn { background:#1f2938; }
         body.investor-view #newsletterBody { font-size:17px; line-height:1.75; }
         body.investor-view #newsletterBody h1 {
           font-size:26px; font-weight:700; margin:0 0 8px;
@@ -369,8 +379,10 @@
         body.investor-view .chart-card { border-radius:12px; padding:20px; }
         body.investor-view[data-brand="proof3"] .chart-card { box-shadow:0 2px 8px rgba(0,0,0,0.2); }
         @media (max-width:600px) {
-          body.investor-view .output { padding:20px 16px 48px; }
-          body.investor-view #newsletterBody { font-size:16px; line-height:1.7; }
+          body.investor-view .output { padding:20px 20px 48px; }
+          body.investor-view #newsletterBody { font-size:16px; line-height:1.75; }
+          body.investor-view .chart-embed { margin-left:-4px; margin-right:-4px; }
+          body.investor-view .view-toggle-btn { bottom:12px; right:12px; font-size:11px; padding:6px 12px; }
           body.investor-view #newsletterBody h1 { font-size:22px; }
           body.investor-view .chart-embed { padding:14px; margin:20px 0; }
           body.investor-view .top-bar { padding:12px 14px 10px; }
@@ -384,6 +396,21 @@
         .image-draggable:hover { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 8px; }
         .image-draggable[draggable=true] { cursor: grab; }
         .image-draggable[draggable=true]:active { cursor: grabbing; }
+        
+        /* Hide edit artifacts in investor/shared view */
+        body.investor-view .image-draggable [style*="drag"],
+        body.investor-view .image-draggable button,
+        body.investor-view .chart-draggable [style*="drag"],
+        body.investor-view .chart-draggable button { display: none !important; }
+        body.investor-view .image-draggable { cursor: default; margin: 20px 0; }
+        body.investor-view .image-draggable:hover { outline: none; }
+        body.investor-view .chart-draggable { cursor: default; }
+        
+        /* Respect user font-size preferences */
+        @media (prefers-reduced-motion: no-preference) {
+          html { scroll-behavior: smooth; }
+        }
+        body.investor-view #newsletterBody { font-size: clamp(15px, 1.1rem, 19px); }
         </style>
   <link rel="icon" id="pageFavicon" type="image/png" href="data:image/png;base64,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"><rect width='32' height='32' rx='6' fill='%2313474A'/><text x='16' y='22' font-family='Georgia,serif' font-size='18' font-weight='bold' fill='%23F1CC6C' text-anchor='middle'>S</text></svg>">
   <link rel="alternate icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA">
@@ -499,6 +526,7 @@
         <!-- Edit toolbar - shown only in edit mode -->
         <div id="editToolbar" style="display:none;position:sticky;top:8px;z-index:50;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;max-width:720px;align-items:center;gap:6px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,0.10);">
           <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-right:4px;">Format</span>
+          <button onclick="formatNormal()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;" title="Normal paragraph">P</button>
           <button onclick="insertHeader(1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;">H1</button>
           <button onclick="insertHeader(2)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">H2</button>
           <button onclick="insertHeader(3)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;cursor:pointer;">H3</button>
@@ -868,6 +896,16 @@ function showNewsletterForType(type) {
   }
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('newsletterContent').style.display = 'block';
+
+  /* Add narrow/wide view toggle button */
+  var toggleBtn = document.createElement('button');
+  toggleBtn.className = 'view-toggle-btn';
+  toggleBtn.textContent = 'Wide View';
+  toggleBtn.onclick = function() {
+    document.body.classList.toggle('wide-view');
+    toggleBtn.textContent = document.body.classList.contains('wide-view') ? 'Narrow View' : 'Wide View';
+  };
+  document.body.appendChild(toggleBtn);
   var charts = selectedCharts[type].length ? selectedCharts[type] : allCharts[type];
   renderNewsletter(newsletters[type], charts);
   /* Render charts immediately if newsletter tab is visible */
@@ -1729,6 +1767,12 @@ async function shareNewsletter() {
 
     /* Store reference locally for Saves panel */
     storeCloudSaveRef(kvId, monthLabel + ' — ' + brand, currentType, brand + ' Investor Newsletter — ' + monthLabel);
+    /* Also store the share URL for easy retrieval */
+    try {
+      var refs = getCloudSaveRefs();
+      if (refs.length > 0 && refs[0].id === kvId) { refs[0].shareUrl = shareUrl; }
+      localStorage.setItem(CLOUD_REFS_KEY, JSON.stringify(refs));
+    } catch(e) {}
 
     /* Copy to clipboard */
     try {
@@ -1787,6 +1831,16 @@ async function shareNewsletter() {
   }, 100);
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('newsletterContent').style.display = 'block';
+
+  /* Add narrow/wide view toggle button */
+  var toggleBtn = document.createElement('button');
+  toggleBtn.className = 'view-toggle-btn';
+  toggleBtn.textContent = 'Wide View';
+  toggleBtn.onclick = function() {
+    document.body.classList.toggle('wide-view');
+    toggleBtn.textContent = document.body.classList.contains('wide-view') ? 'Narrow View' : 'Wide View';
+  };
+  document.body.appendChild(toggleBtn);
   fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(viewId))
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -2308,6 +2362,7 @@ async function refreshSavesPanel() {
         '<div style="font-size:10px;color:var(--muted);">' + (ref.title||'') + (dt2 ? ' &middot; ' + dt2 : '') + '</div></div>' +
         '<div style="display:flex;gap:6px;">' +
         '<button onclick="loadCloudSave(\'' + ref.id + '\', \'' + ref.type + '\')" style="padding:4px 10px;border:1px solid var(--primary);border-radius:4px;background:transparent;color:var(--primary);font-size:11px;cursor:pointer;">Load</button>' +
+              (ref.id.indexOf('monthly-') === 0 ? '<button onclick="copyShareLink(\'' + ref.id + '\', \'' + ref.type + '\')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;" title="Copy investor link">Link</button>' : '') +
         '<button onclick="deleteNamedSave(\'' + ref.id + '\', \'' + ref.type + '\')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;">Delete</button>' +
         '</div></div>';
     }
@@ -3002,6 +3057,17 @@ function setupContextFieldPersistence() {
 
 
 
+
+function copyShareLink(kvId, type) {
+  var url = WORKER_URL + '/view/' + kvId + '?type=' + type;
+  try {
+    navigator.clipboard.writeText(url).then(function() {
+      showStatus('success', 'Investor link copied: ' + url);
+    });
+  } catch(e) {
+    window.prompt('Copy this investor link:', url);
+  }
+}
 </script>
 </div></body>
 </html>
