@@ -2322,54 +2322,88 @@ async function refreshSavesPanel() {
   if (!listEl) return;
   listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0;">Loading...</div>';
   var html = '';
+  var sectionStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:16px 0 8px;';
+  var rowStyle = 'display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);';
+  var btnPrimary = 'padding:4px 10px;border:1px solid var(--primary);border-radius:4px;background:transparent;color:var(--primary);font-size:11px;cursor:pointer;';
+  var btnMuted = 'padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;';
 
-  /* ── Auto-saves (KV latest, shown per type) ── */
-  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px;">Latest Auto-Save Per Type</div>';
+  /* ── Section 1: Latest Auto-Save Per Type ── */
+  html += '<div style="' + sectionStyle + '">Latest Draft (auto-saved)</div>';
   var types = ['all', 'p3spv'];
-  var hasAny = false;
   for (var i = 0; i < types.length; i++) {
-    var type = types[i];
-    var label = (SHEET_CONFIGS[type]||{}).label || type;
-    var dt = '', hasKV = false;
-    /* Try KV */
+    var type = types[i], label = (SHEET_CONFIGS[type]||{}).label || type, dt = '';
     try {
       var r = await fetch(WORKER_URL + '/newsletter?id=' + AUTOSAVE_KV_ID[type]);
-      if (r.ok) { var d = await r.json(); if (d && d.savedAt && !d.error) { dt = new Date(d.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); hasKV = true; hasAny = true; } }
+      if (r.ok) { var d = await r.json(); if (d && d.savedAt && !d.error) dt = new Date(d.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
     } catch(e) {}
-    /* Fall back to localStorage */
-    if (!hasKV) { var ls = loadAutoSave(type); if (ls && ls.savedAt) { dt = new Date(ls.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); hasAny = true; } }
+    if (!dt) { var ls = loadAutoSave(type); if (ls && ls.savedAt) dt = new Date(ls.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
     if (dt) {
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">' +
-        '<div><div style="font-size:12px;font-weight:600;">' + label + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);">Auto-saved ' + dt + (hasKV ? ' ☁️' : ' 💻') + '</div></div>' +
-        '<button onclick="loadCloudSave(\'' + AUTOSAVE_KV_ID[type] + '\', \'' + type + '\')" style="padding:4px 10px;border:1px solid var(--primary);border-radius:4px;background:transparent;color:var(--primary);font-size:11px;cursor:pointer;">Load</button>' +
-        '</div>';
+      html += '<div style="' + rowStyle + '"><div><div style="font-size:12px;font-weight:600;">' + label + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);">Saved ' + dt + '</div></div>' +
+        '<button onclick="loadCloudSave(\'' + AUTOSAVE_KV_ID[type] + '\', \'' + type + '\')" style="' + btnPrimary + '">Load</button></div>';
     }
   }
-  if (!hasAny) html += '<div style="font-size:12px;color:var(--muted);padding:8px 0;">No auto-saves yet. Generate a newsletter to create one.</div>';
 
-  /* ── Named cloud saves ── */
-  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 6px;">Named Saves (Permanent)</div>';
+  /* ── Section 2: Monthly Shared Newsletters ── */
   var refs = getCloudSaveRefs();
-  if (refs.length === 0) {
-    html += '<div style="font-size:12px;color:var(--muted);padding:8px 0;">No named saves yet. Click Save to Cloud after generating.</div>';
-  } else {
-    for (var j = 0; j < refs.length; j++) {
-      var ref = refs[j];
+  var allShares = refs.filter(function(r) { return r.id && r.id.indexOf('monthly-all') === 0; });
+  var p3Shares  = refs.filter(function(r) { return r.id && r.id.indexOf('monthly-p3spv') === 0; });
+  var otherSaves = refs.filter(function(r) { return !r.id || r.id.indexOf('monthly-') !== 0; });
+
+  if (allShares.length > 0) {
+    html += '<div style="' + sectionStyle + '">All Entities — Shared Newsletters</div>';
+    for (var a = 0; a < allShares.length; a++) {
+      var ref = allShares[a];
       var dt2 = ref.savedAt ? new Date(ref.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">' +
-        '<div><div style="font-size:12px;font-weight:600;">' + ref.name + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);">' + (ref.title||'') + (dt2 ? ' &middot; ' + dt2 : '') + '</div></div>' +
-        '<div style="display:flex;gap:6px;">' +
-        '<button onclick="loadCloudSave(\'' + ref.id + '\', \'' + ref.type + '\')" style="padding:4px 10px;border:1px solid var(--primary);border-radius:4px;background:transparent;color:var(--primary);font-size:11px;cursor:pointer;">Load</button>' +
-              (ref.id.indexOf('monthly-') === 0 ? '<button onclick="copyShareLink(\'' + ref.id + '\', \'' + ref.type + '\')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;" title="Copy investor link">Link</button>' : '') +
-        '<button onclick="deleteNamedSave(\'' + ref.id + '\', \'' + ref.type + '\')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;">Delete</button>' +
+      html += '<div style="' + rowStyle + '"><div>' +
+        '<div style="font-size:12px;font-weight:600;">' + (ref.name || ref.id) + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);">' + (dt2 ? 'Shared ' + dt2 : '') + '</div></div>' +
+        '<div style="display:flex;gap:4px;">' +
+        '<button onclick="loadCloudSave(\'' + ref.id + '\', \'all\')" style="' + btnPrimary + '">Load</button>' +
+        '<button onclick="copyShareLink(\'' + ref.id + '\', \'all\')" style="' + btnMuted + '" title="Copy investor link">Link</button>' +
+        '<button onclick="deleteNamedSave(\'' + ref.id + '\', \'all\')" style="' + btnMuted + '">Delete</button>' +
         '</div></div>';
     }
   }
+
+  if (p3Shares.length > 0) {
+    html += '<div style="' + sectionStyle + '">proof3 + SPV1 — Shared Newsletters</div>';
+    for (var p = 0; p < p3Shares.length; p++) {
+      var ref2 = p3Shares[p];
+      var dt3 = ref2.savedAt ? new Date(ref2.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+      html += '<div style="' + rowStyle + '"><div>' +
+        '<div style="font-size:12px;font-weight:600;">' + (ref2.name || ref2.id) + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);">' + (dt3 ? 'Shared ' + dt3 : '') + '</div></div>' +
+        '<div style="display:flex;gap:4px;">' +
+        '<button onclick="loadCloudSave(\'' + ref2.id + '\', \'p3spv\')" style="' + btnPrimary + '">Load</button>' +
+        '<button onclick="copyShareLink(\'' + ref2.id + '\', \'p3spv\')" style="' + btnMuted + '" title="Copy investor link">Link</button>' +
+        '<button onclick="deleteNamedSave(\'' + ref2.id + '\', \'p3spv\')" style="' + btnMuted + '">Delete</button>' +
+        '</div></div>';
+    }
+  }
+
+  if (otherSaves.length > 0) {
+    html += '<div style="' + sectionStyle + '">Other Saves</div>';
+    for (var o = 0; o < otherSaves.length; o++) {
+      var ref3 = otherSaves[o];
+      var dt4 = ref3.savedAt ? new Date(ref3.savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+      html += '<div style="' + rowStyle + '"><div>' +
+        '<div style="font-size:12px;font-weight:600;">' + (ref3.name || ref3.title || ref3.id) + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);">' + (dt4 ? 'Saved ' + dt4 : '') + '</div></div>' +
+        '<div style="display:flex;gap:4px;">' +
+        '<button onclick="loadCloudSave(\'' + ref3.id + '\', \'' + (ref3.type||'all') + '\')" style="' + btnPrimary + '">Load</button>' +
+        '<button onclick="deleteNamedSave(\'' + ref3.id + '\', \'' + (ref3.type||'all') + '\')" style="' + btnMuted + '">Delete</button>' +
+        '</div></div>';
+    }
+  }
+
+  if (refs.length === 0) {
+    html += '<div style="' + sectionStyle + '">Shared Newsletters</div>';
+    html += '<div style="font-size:12px;color:var(--muted);padding:8px 0;">No shared newsletters yet. Generate a newsletter and click Share to create one.</div>';
+  }
+
   listEl.innerHTML = html;
 }
-
 async function deleteNamedSave(id, type) {
   deleteCloudSaveRef(id);
   try { await fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id), { method: 'DELETE' }); } catch(e) {}
