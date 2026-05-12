@@ -691,7 +691,8 @@
   </main>
 </div>
 
-<script>var _savedEditRange = null;
+<script>var _editsDirty = false;
+var _savedEditRange = null;
 
 
 
@@ -861,7 +862,7 @@ function setType(type, cardEl) {
   if (isEditMode) {
     if (!confirm('You have unsaved edits. Save them now before switching?\n\nOK = save edits first\nCancel = discard edits and switch')) {
       /* discard: exit edit mode without saving */
-      isEditMode = false;
+      isEditMode = false; _editsDirty = false;
       var body = document.getElementById('newsletterBody');
       var btn  = document.getElementById('editToggleBtn');
       var tb   = document.getElementById('editToolbar');
@@ -872,7 +873,7 @@ function setType(type, cardEl) {
       /* save: commit edits then switch */
       var body = document.getElementById('newsletterBody');
       if (body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML, _lastRawMarkdown[currentType]); }
-      isEditMode = false;
+      isEditMode = false; _editsDirty = false;
       var btn = document.getElementById('editToggleBtn'); if (btn) btn.textContent = 'Edit';
       var tb  = document.getElementById('editToolbar');  if (tb)  tb.classList.remove('visible');
       if (body) { body.contentEditable = 'false'; body.style.outline = 'none'; body.style.cursor = 'default'; }
@@ -963,6 +964,14 @@ function showNewsletterForType(type) {
 
 /* === TAB SWITCHING === */
 function switchTab(tab, el) {
+  if (_editsDirty && isEditMode) {
+    var save = confirm('You have unsaved edits. Save before switching?');
+    if (save) {
+      var body = document.getElementById('newsletterBody');
+      if (body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); }
+      _editsDirty = false;
+    }
+  }
   var tabs = document.getElementsByClassName('tab');
   for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
   if (el) el.classList.add('active');
@@ -1612,7 +1621,13 @@ function toggleEdit() {
   body.style.cursor    = isEditMode ? 'text' : 'default';
   if (btn) btn.textContent = isEditMode ? 'Done Editing' : 'Edit';
   if (tb) { if (isEditMode) tb.classList.add('visible'); else tb.classList.remove('visible'); }
-  if (isEditMode) { showStatus('loading', 'Edit mode on. Drag charts and images to reorder.'); body.focus(); setupDragDrop(body); setupAllChartDragging(); setupAllImageDragging(); updateTOC(); }
+  if (isEditMode) {
+    showStatus('loading', 'Edit mode on. Drag charts and images to reorder.');
+    body.focus(); setupDragDrop(body); setupAllChartDragging(); setupAllImageDragging(); updateTOC();
+    /* Track edits */
+    body._editListener = function() { _editsDirty = true; };
+    body.addEventListener('input', body._editListener);
+  }
   else { showStatus('success', 'Edits saved.'); newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML, _lastRawMarkdown[currentType]); teardownDragDrop(body); }
 }
 
@@ -3265,6 +3280,14 @@ function copyShareLink(kvId, type) {
     window.prompt('Copy this investor link:', url);
   }
 }
+
+/* Warn before leaving page with unsaved edits */
+window.addEventListener('beforeunload', function(e) {
+  if (_editsDirty && isEditMode) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 </script>
 </div></body>
 </html>
