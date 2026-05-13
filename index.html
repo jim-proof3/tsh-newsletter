@@ -443,6 +443,11 @@
           #editToolbar { width: calc(100% - 24px) !important; left: 12px !important; transform: none !important; }
         }
         
+        
+        .chart-embed[draggable=true]:hover { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 10px; }
+        .chart-embed[draggable=true] { cursor: default; }
+        .chart-drag-handle { display: none; }
+        body.edit-mode .chart-drag-handle { display: inline; }
         </style>
   <link rel="icon" id="pageFavicon" type="image/png" href="data:image/png;base64,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"><rect width='32' height='32' rx='6' fill='%2313474A'/><text x='16' y='22' font-family='Georgia,serif' font-size='18' font-weight='bold' fill='%23F1CC6C' text-anchor='middle'>S</text></svg>">
   <link rel="alternate icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA">
@@ -1637,7 +1642,8 @@ function toggleEdit() {
   if (tb) { if (isEditMode) tb.classList.add('visible'); else tb.classList.remove('visible'); }
   if (isEditMode) {
     showStatus('loading', 'Edit mode on. Drag charts and images to reorder.');
-    body.focus(); setupDragDrop(body); setupAllChartDragging(); setupAllImageDragging(); updateTOC();
+    document.body.classList.add('edit-mode');
+    body.focus(); setupDragDrop(body); setupAllChartDragging(); setupAllImageDragging(); setupAllChartEmbedDragging(); updateTOC();
     /* Track edits */
     body._editListener = function() { _editsDirty = true; };
     body.addEventListener('input', body._editListener);
@@ -1790,9 +1796,12 @@ function renderNewsletter(text, charts) {
     var e = text.indexOf(FENCE_CLOSE, s + CHART_OPEN.length); if (e === -1) { html += mdToHtml(text.substring(pos)); break; }
     var chartTitle = (charts[ci] && charts[ci].title) ? charts[ci].title : ('Chart ' + (ci+1));
     var id = 'chart-inline-' + ci; ci++;
-    html += '<div class="chart-embed" data-chart-index="' + _pendingInlineCharts.length + '">' +
+    html += '<div class="chart-embed" data-chart-index="' + _pendingInlineCharts.length + '" draggable="true" contenteditable="false">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+      '<div style="display:flex;align-items:center;gap:6px;">' +
+      '<span class="chart-drag-handle" style="color:var(--muted);font-size:12px;cursor:grab;user-select:none;" title="Drag to reposition">↕ drag</span>' +
       '<div class="chart-embed-title">' + chartTitle + '</div>' +
+      '</div>' +
       '<button onclick="removeInlineChart(this)" style="border:none;background:var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;padding:2px 7px;border-radius:4px;" title="Remove chart">✕</button>' +
       '</div>' +
       '<canvas id="' + id + '" height="180"></canvas></div>';
@@ -2156,15 +2165,17 @@ function renderSingleChart(canvas, chart) {
   /* === STANDARD SINGLE-AXIS (bar / line / area / multi) === */
   var datasets = chart.series.map(function(s, si) {
     var color = getSeriesColor(si, s, brand);
-    /* Support both new format (s.values array) and old format (d[s.key] row objects) */
     var vals;
     if (s.values && s.values.length) {
+      /* New format: values stored directly on series */
       vals = s.values;
-    } else {
+    } else if (chart.data && chart.data.length && typeof chart.data[0] === 'object') {
+      /* Old format: row objects with keys */
       vals = chart.data.map(function(d) {
-        if (typeof d === 'string') return 0;
         return typeof d[s.key] === 'number' ? d[s.key] : (parseFloat(String(d[s.key] || '').replace(/[$,%]/g,'')) || 0);
       });
+    } else {
+      vals = [];
     }
     var isBar = chart.type === 'bar';
     return {
@@ -3460,6 +3471,28 @@ function setupAllImageDragging() {
   if (!body) return;
   var wrappers = body.querySelectorAll('.image-draggable');
   for (var i = 0; i < wrappers.length; i++) setupImageDrag(wrappers[i]);
+}
+
+function setupAllChartEmbedDragging() {
+  var body = document.getElementById('newsletterBody');
+  if (!body) return;
+  var embeds = body.querySelectorAll('.chart-embed[draggable=true]');
+  for (var i = 0; i < embeds.length; i++) {
+    (function(embed) {
+      embed.addEventListener('dragstart', function(e) {
+        _dragSrc = embed;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', '');
+        setTimeout(function() { embed.style.opacity = '0.4'; }, 0);
+      });
+      embed.addEventListener('dragend', function() {
+        embed.style.opacity = '1';
+        _dragSrc = null;
+        var b = document.getElementById('newsletterBody');
+        if (b) { newsletters[currentType] = b.innerHTML; autoSave(currentType, b.innerHTML); }
+      });
+    })(embeds[i]);
+  }
 }
 
 /* === PRE-FILL CHART BUILDER DATES FROM GENERATED RANGE === */
