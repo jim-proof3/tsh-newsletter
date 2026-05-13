@@ -476,8 +476,8 @@
 
 <div id="savesPanel" style="display:none;position:fixed;top:48px;right:0;width:400px;max-height:85vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:0 0 0 12px;box-shadow:0 4px 24px rgba(0,0,0,0.18);z-index:250;padding:0;">
   <div style="padding:14px 16px 0;display:flex;justify-content:space-between;align-items:center;">
-    <span style="font-size:14px;font-weight:700;">Saves & Shares</span>
-    <button onclick="toggleSavesPanel()" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--muted);">✕</button>
+    <span style="font-size:14px;font-weight:700;">History</span>
+    <button onclick="toggleHistoryPanel()" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--muted);">✕</button>
   </div>
   <div id="savesTabBar" style="display:flex;gap:0;padding:10px 16px 0;border-bottom:2px solid var(--border);">
     <button class="saves-tab active" data-tab="shares" onclick="switchSavesTab('shares')">Shared Links</button>
@@ -515,7 +515,7 @@
   <div class="top-bar-actions">
     <button class="top-bar-btn" id="editToggleBtn" onclick="toggleEdit()">Edit</button>
     <button class="top-bar-btn" id="chartPickerBtn" onclick="toggleChartPicker()">&#9783; Chart Picker</button>
-    <button class="top-bar-btn" id="savesPanelBtn" onclick="toggleSavesPanel()">&#128190; Saves</button>
+    <button class="top-bar-btn" id="savesPanelBtn" onclick="toggleHistoryPanel()">&#128190; History</button>
     <button class="top-bar-btn" onclick="saveToCloud()">Save</button>
     <button class="top-bar-btn" onclick="copyNewsletter()">Copy</button>
     <button class="top-bar-btn" onclick="exportToDoc()">Doc</button>
