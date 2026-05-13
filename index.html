@@ -3164,6 +3164,13 @@ async function resolveMetricAsync(selId) {
   /* Legacy ops format */
   if (val.indexOf('ops:') === 0) {
     var ci = parseInt(val.replace('ops:', ''), 10);
+    if (!window._opsDataCache) {
+      var opsCfg = null;
+      for (var _oi = 0; _oi < CHART_BUILDER_TABS.length; _oi++) {
+        if (CHART_BUILDER_TABS[_oi].id === 'cb_g1ops') { opsCfg = CHART_BUILDER_TABS[_oi]; break; }
+      }
+      if (opsCfg) { window._opsDataCache = await fetchTabData(opsCfg); }
+    }
     var ops = window._opsDataCache;
     if (!ops) return null;
     return { colIdx: ci, name: ops.hdr[ci] || 'Metric', sourceRows: ops.dataRows };
