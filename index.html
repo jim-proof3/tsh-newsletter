@@ -421,19 +421,19 @@
         }
         body.investor-view #newsletterBody { font-size: clamp(15px, 1.1rem, 19px); }
         
-        .saves-tab {
+        .history-tab {
           padding:8px 14px; border:none; background:transparent; cursor:pointer;
           font-size:11px; font-weight:600; color:var(--muted); border-bottom:2px solid transparent;
           margin-bottom:-2px; text-transform:uppercase; letter-spacing:0.5px;
         }
-        .saves-tab.active { color:var(--primary); border-bottom-color:var(--primary); }
-        .saves-tab:hover { color:var(--text); }
-        .saves-type-btn {
+        .history-tab.active { color:var(--primary); border-bottom-color:var(--primary); }
+        .history-tab:hover { color:var(--text); }
+        .history-type-btn {
           padding:4px 12px; border:1px solid var(--border); background:transparent; cursor:pointer;
           font-size:10px; font-weight:600; color:var(--muted); border-radius:12px; margin-right:4px;
         }
-        .saves-type-btn.active { background:var(--primary); color:white; border-color:var(--primary); }
-        .saves-type-btn:hover { border-color:var(--primary); }
+        .history-type-btn.active { background:var(--primary); color:white; border-color:var(--primary); }
+        .history-type-btn:hover { border-color:var(--primary); }
         
         @media (max-width: 900px) {
           #editToolbar { width: calc(100% - 24px) !important; left: 12px !important; transform: none !important; }
@@ -936,6 +936,9 @@ function setType(type, cardEl) {
   setupContextFieldPersistence();
   setFavicon((SHEET_CONFIGS[currentType]||{}).brand || 'sagehouse');
   setTitle(currentType);
+  /* Load custom charts from KV on page load */
+  loadCustomChartsFromKV('all');
+  loadCustomChartsFromKV('p3spv');
   restoreAutoSaves();
 })();
 
@@ -2530,38 +2533,38 @@ async function restoreAutoSaves() {
 
 /* Show the saves panel */
 function showSavesPanel() {
-  var panel = document.getElementById('savesPanel');
+  var panel = document.getElementById('historyPanel');
   if (!panel) return;
   if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
-  refreshSavesPanel();
+  refreshHistoryPanel();
   panel.style.display = 'block';
 }
 
-var _savesCache = null; /* cached KV data */
-var _savesCurrentTab = 'shares';
-var _savesCurrentType = 'both';
+var _historyCache = null; /* cached KV data */
+var _historyCurrentTab = 'shares';
+var _historyCurrentType = 'both';
 
-async function refreshSavesPanel() {
-  var listEl = document.getElementById('savesList');
+async function refreshHistoryPanel() {
+  var listEl = document.getElementById('historyList');
   if (!listEl) return;
 
   /* Fetch from KV only if not cached */
-  if (!_savesCache) {
+  if (!_historyCache) {
     listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:12px 0;">Loading...</div>';
     try {
       var resp = await fetch(WORKER_URL + '/newsletter/list');
       if (resp.ok) {
         var data = await resp.json();
-        _savesCache = data.saves || [];
-      } else { _savesCache = []; }
-    } catch(e) { _savesCache = []; }
+        _historyCache = data.saves || [];
+      } else { _historyCache = []; }
+    } catch(e) { _historyCache = []; }
   }
 
   renderSavesList();
 }
 
-function switchSavesTab(tab) {
-  _savesCurrentTab = tab;
+function switchHistoryTab(tab) {
+  _historyCurrentTab = tab;
   var tabs = document.querySelectorAll('.saves-tab');
   for (var i = 0; i < tabs.length; i++) {
     tabs[i].classList.toggle('active', tabs[i].getAttribute('data-tab') === tab);
@@ -2569,8 +2572,8 @@ function switchSavesTab(tab) {
   renderSavesList();
 }
 
-function filterSavesType(type) {
-  _savesCurrentType = type;
+function filterHistoryType(type) {
+  _historyCurrentType = type;
   var btns = document.querySelectorAll('.saves-type-btn');
   for (var i = 0; i < btns.length; i++) {
     btns[i].classList.toggle('active', btns[i].getAttribute('data-filter') === type);
@@ -2579,20 +2582,20 @@ function filterSavesType(type) {
 }
 
 function renderSavesList() {
-  var listEl = document.getElementById('savesList');
-  if (!listEl || !_savesCache) return;
+  var listEl = document.getElementById('historyList');
+  if (!listEl || !_historyCache) return;
 
-  var tab = _savesCurrentTab;
-  var typeFilter = _savesCurrentType;
+  var tab = _historyCurrentTab;
+  var typeFilter = _historyCurrentType;
 
   /* Filter saves based on current tab */
   var filtered;
   if (tab === 'shares') {
-    filtered = _savesCache.filter(function(s) { return s.id && s.id.indexOf('monthly-') === 0; });
+    filtered = _historyCache.filter(function(s) { return s.id && s.id.indexOf('monthly-') === 0; });
   } else if (tab === 'drafts') {
-    filtered = _savesCache.filter(function(s) { return s.saveType === 'draft' || (s.named && s.id.indexOf('monthly-') !== 0 && !s.autoSave); });
+    filtered = _historyCache.filter(function(s) { return s.saveType === 'draft' || (s.named && s.id.indexOf('monthly-') !== 0 && !s.autoSave); });
   } else {
-    filtered = _savesCache.filter(function(s) { return s.autoSave || s.id === 'autosave-all-entities' || s.id === 'autosave-p3spv'; });
+    filtered = _historyCache.filter(function(s) { return s.autoSave || s.id === 'autosave-all-entities' || s.id === 'autosave-p3spv'; });
   }
 
   /* Apply type filter */
@@ -2653,7 +2656,7 @@ function deleteSaveOptimistic(id, type) {
   var row = document.getElementById(rowId);
   if (row) row.style.display = 'none';
   /* Remove from cache */
-  if (_savesCache) _savesCache = _savesCache.filter(function(s) { return s.id !== id; });
+  if (_historyCache) _historyCache = _historyCache.filter(function(s) { return s.id !== id; });
   /* Delete from KV in background */
   fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(function() {});
   showStatus('success', 'Deleted.');
@@ -2670,7 +2673,7 @@ function loadSave(type, isLocal) {
   var cards = document.querySelectorAll('[data-type="' + type + '"]');
   if (cards.length > 0) setType(type, cards[0]);
   else showNewsletterForType(type);
-  document.getElementById('savesPanel').style.display = 'none';
+  document.getElementById('historyPanel').style.display = 'none';
   showStatus('success', 'Newsletter loaded.');
 }
 
@@ -2678,7 +2681,7 @@ function deleteSave(type, isLocal) {
   if (isLocal) {
     try { localStorage.removeItem(AUTOSAVE_KEY_PREFIX + type); } catch(e) {}
   }
-  refreshSavesPanel();
+  refreshHistoryPanel();
   showStatus('success', 'Save deleted.');
 }
 
@@ -2712,7 +2715,7 @@ async function saveToCloud() {
     showStatus('success', 'Saved to cloud as "' + name.trim() + '" (ID: ' + result.id + ')');
     /* Also store the ID locally so we can list it */
     storeCloudSaveRef(result.id, name.trim(), currentType, (cfg.label || '') + ' Newsletter');
-    refreshSavesPanel();
+    refreshHistoryPanel();
   } catch(err) {
     console.error('Cloud save error:', err);
     showStatus('error', 'Save failed: ' + err.message);
@@ -2766,7 +2769,7 @@ async function loadCloudSave(id, type) {
     var cards = document.querySelectorAll('[data-type="' + t + '"]');
     if (cards.length > 0) setType(t, cards[0]);
     else showNewsletterForType(t);
-    document.getElementById('savesPanel').style.display = 'none';
+    document.getElementById('historyPanel').style.display = 'none';
     showStatus('success', 'Newsletter loaded from cloud.');
   } catch(err) {
     showStatus('error', 'Load failed: ' + err.message + '. Link may have expired (90 day limit).');
@@ -2865,6 +2868,58 @@ function resolveMetricSel(selId) {
   return { colIdx: colIdx, name: name, sourceRows: sourceRows, isOps: isOps };
 }
 
+
+/* ── Dedicated KV storage for custom charts ── */
+var CUSTOM_CHARTS_KV = { all: 'custom-charts-all', p3spv: 'custom-charts-p3spv' };
+
+async function saveCustomChartsToKV(type) {
+  var charts = customCharts[type] || [];
+  /* Always save — even empty array — so we can distinguish "none" from "not loaded" */
+  try {
+    localStorage.setItem('sh_custom_charts_' + type, JSON.stringify(charts));
+  } catch(e) {}
+  try {
+    await fetch(WORKER_URL + '/newsletter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: CUSTOM_CHARTS_KV[type],
+        text: '[]', /* placeholder */
+        charts: charts,
+        customCharts: charts,
+        type: type,
+        title: 'Custom Charts — ' + type,
+        autoSave: false,
+        saveType: 'custom-charts',
+        savedAt: new Date().toISOString()
+      })
+    });
+  } catch(e) { console.log('Custom charts KV save error:', e); }
+}
+
+async function loadCustomChartsFromKV(type) {
+  /* Try localStorage first (fast) */
+  try {
+    var ls = localStorage.getItem('sh_custom_charts_' + type);
+    if (ls) {
+      var parsed = JSON.parse(ls);
+      if (parsed && parsed.length) { customCharts[type] = parsed; return parsed; }
+    }
+  } catch(e) {}
+  /* Fall back to KV */
+  try {
+    var resp = await fetch(WORKER_URL + '/newsletter?id=' + CUSTOM_CHARTS_KV[type]);
+    if (resp.ok) {
+      var data = await resp.json();
+      if (data && data.charts && data.charts.length) {
+        customCharts[type] = data.charts;
+        try { localStorage.setItem('sh_custom_charts_' + type, JSON.stringify(data.charts)); } catch(e) {}
+        return data.charts;
+      }
+    }
+  } catch(e) {}
+  return [];
+}
 async function buildCustomChart() {
   /* Debug */
   var dbgSel = document.getElementById('chartBuilderMetric');
@@ -2998,8 +3053,8 @@ async function buildCustomChart() {
 
   if (!customCharts[currentType]) customCharts[currentType] = [];
   customCharts[currentType].push(chartDef);
-  /* Save custom charts to localStorage immediately */
-  try { localStorage.setItem('sh_custom_charts_' + currentType, JSON.stringify(customCharts[currentType])); } catch(e) {}
+  /* Save custom charts to dedicated KV key */
+  saveCustomChartsToKV(currentType);
 
   /* Re-render entire charts tab so new chart appears in correct grid position */
   var chartsTab = document.getElementById('chartsTab');
@@ -3111,6 +3166,7 @@ function renderCustomChartsGrid() {
 function removeCustomChart(idx) {
   if (!customCharts[currentType]) customCharts[currentType] = [];
   customCharts[currentType].splice(idx, 1);
+  saveCustomChartsToKV(currentType);
   renderCustomChartsGrid();
 }
 
@@ -3186,6 +3242,21 @@ function insertChartAtSection(idx) {
 
 /* === TOGGLE PANELS === */
 
+
+function removeBlankCharts() {
+  var all = allCharts[currentType] || [];
+  allCharts[currentType] = all.filter(function(c) {
+    return c.series && c.series[0] && c.series[0].values && c.series[0].values.length > 0;
+  });
+  selectedCharts[currentType] = (selectedCharts[currentType] || []).filter(function(c) {
+    return allCharts[currentType].indexOf(c) >= 0;
+  });
+  saveCustomChartsToKV(currentType);
+  autoSave(currentType, newsletters[currentType] || '');
+  renderChartsTab();
+  refreshChartPicker();
+  showStatus('success', 'Blank charts removed.');
+}
 function refreshChartPicker() {
   var listEl = document.getElementById('chartPickerList');
   if (!listEl) return;
@@ -3243,19 +3314,19 @@ function toggleChartPicker() {
     showChartPickerContent();
   }
 }
-function toggleSavesPanel() {
-  var panel = document.getElementById('savesPanel');
-  var btn   = document.getElementById('savesPanelBtn');
+function toggleHistoryPanel() {
+  var panel = document.getElementById('historyPanel');
+  var btn   = document.getElementById('historyPanelBtn');
   var isOpen = panel && panel.style.display !== 'none';
   if (panel) panel.style.display = isOpen ? 'none' : 'block';
   if (btn)   btn.classList.toggle('active', !isOpen);
   if (!isOpen) {
-    _savesCache = null; /* force fresh fetch */
-    refreshSavesPanel();
+    _historyCache = null; /* force fresh fetch */
+    refreshHistoryPanel();
   }
 }
 /* Keep old showSavesPanel as alias */
-function showSavesPanel() { toggleSavesPanel(); }
+function showSavesPanel() { toggleHistoryPanel(); }
 /* Keep old showChartPicker as alias */
 function showChartPicker() { toggleChartPicker(); }
 function showChartPickerContent() {
