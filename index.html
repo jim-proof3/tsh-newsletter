@@ -1,4 +1,5 @@
-<!DOCTYPE html><!-- v1778620779 -->
+<!DOCTYP
+    <button class="top-bar-btn" id="rerenderBtn" onclick="reRenderCharts()" title="Re-render blank charts">&#8635; Charts</button>E html><!-- v1778620779 -->
 <html lang="en" data-brand="sagehouse">
 <head>
   <meta charset="UTF-8">
@@ -1629,6 +1630,85 @@ function formatNormal() {
 
 function execCmd(cmd) { document.execCommand(cmd, false, null); }
 
+
+/* ── Re-render Charts in existing newsletter without regenerating ── */
+async function reRenderCharts() {
+  var body = document.getElementById('newsletterBody');
+  if (!body) { showStatus('error', 'No newsletter loaded.'); return; }
+
+  showStatus('loading', 'Re-rendering charts...');
+
+  /* Ensure sheet data is loaded for any re-fetch needed */
+  if (!sheetDataCache) {
+    fetchSheetData(currentType).then(function(sd) {
+      if (sd) { sheetDataCache = sd; }
+    });
+  }
+
+  /* Build the full chart array: allCharts + customCharts */
+  var allForRender = (allCharts[currentType] || []).concat(customCharts[currentType] || []);
+
+  /* If no charts in memory, try to load from KV */
+  if (!allForRender.length) {
+    showStatus('loading', 'Loading charts from cloud...');
+    try {
+      var resp = await fetch(WORKER_URL + '/newsletter?id=' + AUTOSAVE_KV_ID[currentType]);
+      if (resp.ok) {
+        var data = await resp.json();
+        if (data.charts && data.charts.length) {
+          allCharts[currentType] = data.charts;
+          selectedCharts[currentType] = data.charts.slice();
+        }
+        if (data.customCharts && data.customCharts.length) {
+          customCharts[currentType] = data.customCharts;
+        }
+        allForRender = (allCharts[currentType] || []).concat(customCharts[currentType] || []);
+      }
+    } catch(e) {}
+    /* Also try dedicated custom charts KV key */
+    var ccResp = await loadCustomChartsFromKV(currentType);
+    allForRender = (allCharts[currentType] || []).concat(customCharts[currentType] || []);
+  }
+
+  if (!allForRender.length) {
+    showStatus('error', 'No chart data found. Try generating the newsletter first.');
+    return;
+  }
+
+  /* Find all chart-embed canvases in the newsletter body */
+  var embeds = body.querySelectorAll('.chart-embed');
+  var canvases = body.querySelectorAll('.chart-embed canvas');
+
+  if (!canvases.length) {
+    showStatus('error', 'No chart placeholders found in newsletter.');
+    return;
+  }
+
+  var rendered = 0;
+  for (var i = 0; i < canvases.length; i++) {
+    var canvas = canvases[i];
+    var chartIdx = parseInt(canvas.closest('.chart-embed').getAttribute('data-chart-index') || i, 10);
+    var chart = allForRender[chartIdx] || allForRender[i];
+    if (chart && canvas) {
+      destroyChart(canvas.id);
+      (function(c, ch) {
+        setTimeout(function() {
+          renderSingleChart(c, ch);
+        }, 100 * rendered);
+      })(canvas, chart);
+      rendered++;
+    }
+  }
+
+  /* Also update _pendingInlineCharts for future tab switches */
+  _pendingInlineCharts = allForRender;
+
+  setTimeout(function() {
+    showStatus('success', 'Re-rendered ' + rendered + ' chart' + (rendered !== 1 ? 's' : '') + '.');
+    /* Update charts tab too */
+    renderChartsTab();
+  }, 100 * rendered + 200);
+}
 function toggleEdit() {
   isEditMode = !isEditMode;
   var body = document.getElementById('newsletterBody');
