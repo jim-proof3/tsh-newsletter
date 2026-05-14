@@ -1847,37 +1847,26 @@ function removeOrphanCharts() {
   var body = document.getElementById('newsletterBody');
   if (!body) { showStatus('error', 'No newsletter loaded.'); return; }
 
-  var sel = selectedCharts[currentType] || [];
   var all = allCharts[currentType] || [];
+  var allTitlesUpper = all.map(function(c) { return (c && c.title || '').toUpperCase(); });
   var embeds = body.querySelectorAll('.chart-embed');
   var removed = 0;
 
+  console.log('[Clean] scanning', embeds.length, 'embeds against', all.length, 'chart records');
+
   for (var i = embeds.length - 1; i >= 0; i--) {
     var embed = embeds[i];
-    var canvas = embed.querySelector('canvas');
-    if (!canvas) {
-      embed.parentNode.removeChild(embed);
-      removed++;
-      continue;
-    }
-    /* Check if Chart.js has rendered this canvas */
-    var hasChart = _chartRegistry && _chartRegistry[canvas.id];
-    if (hasChart) continue; /* working chart, leave it */
+    var titleEl = embed.querySelector('.chart-embed-title');
+    var titleText = titleEl ? titleEl.textContent.trim().toUpperCase() : '';
 
-    /* No chart rendered - check if we have data that could render it */
-    var dataIdx = parseInt(embed.getAttribute('data-chart-index') || '-1', 10);
-    var chartByIdx = (dataIdx >= 0 && sel[dataIdx]) ? sel[dataIdx] : null;
-    /* Also try matching by title */
-    var title = embed.querySelector('.chart-embed-title');
-    var titleText = title ? title.textContent.trim() : '';
-    var chartByTitle = null;
-    for (var ci = 0; ci < all.length; ci++) {
-      if (all[ci] && all[ci].title && all[ci].title.toUpperCase().indexOf(titleText.toUpperCase()) >= 0) {
-        chartByTitle = all[ci]; break;
-      }
+    /* Match by title - find any chart in allCharts with matching title */
+    var foundMatch = false;
+    for (var ai = 0; ai < allTitlesUpper.length; ai++) {
+      if (allTitlesUpper[ai] === titleText) { foundMatch = true; break; }
     }
-    if (!chartByIdx && !chartByTitle) {
-      /* No data anywhere - this is an orphan */
+
+    if (!foundMatch) {
+      console.log('[Clean] removing orphan:', titleText);
       embed.parentNode.removeChild(embed);
       removed++;
     }
@@ -1887,11 +1876,36 @@ function removeOrphanCharts() {
     newsletters[currentType] = body.innerHTML;
     autoSave(currentType, body.innerHTML);
     saveUnifiedChartsToKV(currentType);
-    showStatus('success', 'Removed ' + removed + ' orphan chart' + (removed>1?'s':'') + ' from newsletter.');
+    showStatus('success', 'Removed ' + removed + ' orphan chart' + (removed>1?'s':'') + '.');
   } else {
-    showStatus('success', 'No orphan charts found.');
+    showStatus('success', 'No orphans found. All charts have matching data.');
   }
 }
+
+/* Always-on X button injection: add X buttons to any chart-embed that lacks one */
+function ensureChartEmbedXButtons() {
+  var body = document.getElementById('newsletterBody');
+  if (!body) return;
+  var embeds = body.querySelectorAll('.chart-embed');
+  for (var i = 0; i < embeds.length; i++) {
+    var embed = embeds[i];
+    var existingBtn = embed.querySelector('button[onclick*="removeInlineChart"]');
+    if (existingBtn) continue;
+    /* Add X button - find the title row or create one */
+    var titleEl = embed.querySelector('.chart-embed-title');
+    if (titleEl && titleEl.parentNode) {
+      var parent = titleEl.parentNode;
+      /* If parent doesn't have flex layout, wrap title + X button */
+      var btn = document.createElement('button');
+      btn.setAttribute('onclick', 'removeInlineChart(this)');
+      btn.setAttribute('title', 'Remove from newsletter');
+      btn.style.cssText = 'border:none;background:var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;padding:2px 7px;border-radius:4px;float:right;';
+      btn.innerHTML = '✕';
+      titleEl.parentNode.insertBefore(btn, titleEl);
+    }
+  }
+}
+
 
 async function reRenderCharts() {
   var body = document.getElementById('newsletterBody');
