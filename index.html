@@ -566,6 +566,17 @@
     var favLink = document.getElementById('pageFavicon');
     if (favLink) favLink.setAttribute('href', 'https://jim-proof3.github.io/tsh-newsletter/' + (isP3 ? 'p3-logo.png' : 'sh-logo.png'));
   })();
+
+  /* Set favicon for non-investor (generator) pages by reading saved currentType */
+  (function() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('view')) return; /* investor view handled above */
+    var savedType = null;
+    try { savedType = localStorage.getItem('sh_current_type'); } catch(e) {}
+    var isP3 = savedType === 'p3spv';
+    var favLink = document.getElementById('pageFavicon');
+    if (favLink) favLink.setAttribute('href', 'https://jim-proof3.github.io/tsh-newsletter/' + (isP3 ? 'p3-logo.png' : 'sh-logo.png'));
+  })();
   </script>
 </head>
 <body>
@@ -989,6 +1000,7 @@ function setType(type, cardEl) {
     }
   }
   currentType = type;
+  try { localStorage.setItem('sh_current_type', type); } catch(e) {}
   var cfg = SHEET_CONFIGS[type];
   /* Sync both sidebar type cards and top bar type buttons */
   var cards = document.querySelectorAll('.type-card');
@@ -2408,15 +2420,29 @@ async function shareNewsletter() {
         requestAnimationFrame(function() {
           updateTOC();
           /* Find all chart-embed canvases and re-render them by index */
-          var embeds = document.querySelectorAll('.chart-embed canvas');
-          for (var ei = 0; ei < embeds.length; ei++) {
-            (function(canvas, idx) {
-              var chart = allForRender[idx];
+          /* Match each embed canvas to its chart by TITLE - order-independent */
+          var embedsList = document.querySelectorAll('.chart-embed');
+          for (var ei = 0; ei < embedsList.length; ei++) {
+            (function(embed, idx) {
+              var canvas = embed.querySelector('canvas');
+              if (!canvas) return;
+              var titleEl = embed.querySelector('.chart-embed-title');
+              var titleText = titleEl ? titleEl.textContent.trim().toUpperCase() : '';
+              /* Find chart with matching title in allForRender */
+              var chart = null;
+              for (var ai = 0; ai < allForRender.length; ai++) {
+                if (allForRender[ai] && allForRender[ai].title && allForRender[ai].title.toUpperCase() === titleText) {
+                  chart = allForRender[ai];
+                  break;
+                }
+              }
+              /* Fallback: by index if no title match */
+              if (!chart) chart = allForRender[idx];
               if (chart && canvas) {
                 destroyChart(canvas.id);
                 setTimeout(function() { renderSingleChart(canvas, chart); }, 80 * idx);
               }
-            })(embeds[ei], ei);
+            })(embedsList[ei], ei);
           }
           /* Also render charts tab */
           renderChartsTab();
