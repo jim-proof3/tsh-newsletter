@@ -2730,13 +2730,20 @@ async function restoreAutoSaves() {
         var data = await resp.json();
         if (data && data.text && !data.error) {
           newsletters[type] = data.text;
-          /* Use stored charts array directly - most reliable, no markdown parsing needed */
-          if (data.charts && data.charts.length) {
-            allCharts[type] = data.charts;
-          } else {
-            allCharts[type] = extractCharts(data.text || '');
+          /* MERGE charts from autosave with existing allCharts (preserves migrated/manually added) */
+          var autosaveCharts = (data.charts && data.charts.length) ? data.charts : extractCharts(data.text || '');
+          if (!allCharts[type]) allCharts[type] = [];
+          var existingTitles = allCharts[type].map(function(c) { return c && c.title; });
+          for (var aci = 0; aci < autosaveCharts.length; aci++) {
+            var ac = autosaveCharts[aci];
+            if (ac && ac.title && existingTitles.indexOf(ac.title) < 0) {
+              allCharts[type].push(ac);
+            }
           }
-          selectedCharts[type] = allCharts[type].slice();
+          /* selectedCharts: if empty, default to all. Otherwise preserve. */
+          if (!selectedCharts[type] || !selectedCharts[type].length) {
+            selectedCharts[type] = allCharts[type].slice();
+          }
           if (data.customCharts && data.customCharts.length) {
             customCharts[type] = data.customCharts;
           }
@@ -2755,12 +2762,19 @@ async function restoreAutoSaves() {
       var saved = loadAutoSave(type);
       if (saved && saved.text) {
         newsletters[type] = saved.text;
-        if (saved.charts && saved.charts.length) {
-          allCharts[type] = saved.charts;
-        } else {
-          allCharts[type] = extractCharts(saved.text || '');
+        /* MERGE charts from local save */
+        var localCharts = (saved.charts && saved.charts.length) ? saved.charts : extractCharts(saved.text || '');
+        if (!allCharts[type]) allCharts[type] = [];
+        var existingTitlesL = allCharts[type].map(function(c) { return c && c.title; });
+        for (var lci = 0; lci < localCharts.length; lci++) {
+          var lc = localCharts[lci];
+          if (lc && lc.title && existingTitlesL.indexOf(lc.title) < 0) {
+            allCharts[type].push(lc);
+          }
         }
-        selectedCharts[type] = allCharts[type].slice();
+        if (!selectedCharts[type] || !selectedCharts[type].length) {
+          selectedCharts[type] = allCharts[type].slice();
+        }
         if (saved.customCharts && saved.customCharts.length) {
           customCharts[type] = saved.customCharts;
         }
@@ -2769,6 +2783,11 @@ async function restoreAutoSaves() {
     }
   }
 
+  /* Save merged unified state so it persists */
+  try {
+    saveUnifiedChartsToKV('all');
+    saveUnifiedChartsToKV('p3spv');
+  } catch(e) {}
   var allRestored = kvRestored.concat(localRestored);
   if (allRestored.length > 0) {
     showNewsletterForType(currentType);
