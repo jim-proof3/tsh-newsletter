@@ -913,7 +913,13 @@ var CONTEXT_FIELDS = {
   ]
 };
 
-var currentType = 'all';
+var currentType = (function() {
+  try {
+    var saved = localStorage.getItem('sh_current_type');
+    if (saved === 'all' || saved === 'p3spv') return saved;
+  } catch(e) {}
+  return 'all';
+})();
 var savedCursorRange = null;
 function saveCursorPosition() {
   var sel = window.getSelection();
