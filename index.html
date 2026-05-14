@@ -1059,21 +1059,21 @@ function setType(type, cardEl) {
       }
     } catch(e) { console.error('[init] unified charts load/migrate failed:', e); }
     try { await restoreAutoSaves(); } catch(e) { console.error('[init] restoreAutoSaves failed:', e); }
-    /* Re-render newsletter inline charts so saved canvases come alive */
+    /* Re-render newsletter inline charts using TITLE MATCHING (not index) */
     try {
       var nlBody = document.getElementById('newsletterBody');
       if (nlBody && nlBody.innerHTML && allCharts[currentType] && allCharts[currentType].length) {
         var charts = (selectedCharts[currentType] && selectedCharts[currentType].length) ? selectedCharts[currentType] : allCharts[currentType];
         _pendingInlineCharts = charts;
-        var canvases = nlBody.querySelectorAll('.chart-embed canvas');
-        for (var ci = 0; ci < canvases.length; ci++) {
-          (function(cv, idx) {
-            if (charts[idx]) setTimeout(function() { destroyChart(cv.id); renderSingleChart(cv, charts[idx]); }, 80 * idx);
-          })(canvases[ci], ci);
+        /* Use renderNewsletterCharts which matches by title - reliable */
+        if (typeof renderNewsletterCharts === 'function') {
+          /* Stagger to allow DOM layout to settle */
+          setTimeout(function() { renderNewsletterCharts(); }, 100);
         }
       }
     } catch(e) { console.error('[init] inline re-render failed:', e); }
     if (typeof renderChartsTab === 'function') { try { renderChartsTab(); } catch(e) {} }
+    try { ensureChartEmbedXButtons(); } catch(e) {}
   })();
 })();
 
@@ -3121,9 +3121,27 @@ function deleteSaveOptimistic(id, type) {
   if (row) row.style.display = 'none';
   /* Remove from cache */
   if (_historyCache) _historyCache = _historyCache.filter(function(s) { return s.id !== id; });
-  /* Delete from KV in background */
-  fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id), { method: 'DELETE' }).catch(function() {});
-  showStatus('success', 'Deleted.');
+  /* Delete from KV — await + verify */
+  fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id), { method: 'DELETE' })
+    .then(function(r) {
+      if (!r.ok) {
+        console.error('[delete] failed for', id, 'status', r.status);
+        showStatus('error', 'Delete failed for ' + id + ' (status ' + r.status + ')');
+        if (row) row.style.display = ''; /* unhide */
+        _historyCache = null; /* force refetch */
+      } else {
+        console.log('[delete] success:', id);
+      }
+    })
+    .catch(function(e) {
+      console.error('[delete] network error for', id, e);
+      showStatus('error', 'Delete network error: ' + (e.message || 'unknown'));
+      if (row) row.style.display = '';
+      _historyCache = null;
+    });
+  /* Always invalidate cache so next panel open re-fetches truth */
+  _historyCache = null;
+  showStatus('success', 'Deleting ' + id + '...');
 }
 async function deleteNamedSave(id, type) { deleteSaveOptimistic(id, type); }
 
