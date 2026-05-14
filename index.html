@@ -448,6 +448,13 @@
         .chart-embed[draggable=true] { cursor: default; }
         .chart-drag-handle { display: none; }
         body.edit-mode .chart-drag-handle { display: inline; }
+        
+        /* Hide editor-only elements in investor (shared link) view */
+        body.investor-view .chart-drag-handle { display: none !important; }
+        body.investor-view .chart-embed[draggable="true"] { cursor: default !important; }
+        body.investor-view .chart-embed button[onclick*="removeInlineChart"] { display: none !important; }
+        body.investor-view .chart-card button[onclick*="removeGeneratedChart"] { display: none !important; }
+        body.investor-view .chart-card button[onclick*="removeCustomChart"] { display: none !important; }
         </style>
   <link rel="icon" id="pageFavicon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAJkklEQVR42u2aeZAU1R3HP+91z/QxM7vL7nK5QRCCiEqJFyZqPGOwSMx6gEYlosZESZRSIsSgSMSkghFMJBohESyjFlGLWERRE6VEixBFUcAoCIHikF1g3Wvume5+L3/MMkBEsovILjKvav6Z7prp36d/5/c9UTV8hOYwXpLDfJUAlACUAJQAlACUAJQAlAB03gMIcXgCEIAG0rnc4Qkg0JqQlAwdOACt9eEFwJCSVDrDtbXD+e3EsVimiVKazoiGgw5ACEHO8ziyV3euHHEejfEkeveY+NJ7gNYYUpLMZHn274vJ5/Nk8x5SiM6w/+AAELv5tgZCpsmOphbWbd6KUgrP9/e450sBQAqBYUg0EAQBYg8n0Egp6VVVSTqTxQ+CLw8AIQSGlGTyeZpa4kgg4tj4gdqjBmqtiboOqUwWpRSd1Q2YB7KuS0OSyeXJZnMM7ncklw8/m1OHDMYKmUyaOYeV6zbg2nYx2cUiDolMFnWol0EpJQpoaklQU13J/eN/xDMPTOGY/n155/3VVFWUoZQqJsECMEE04pJIpXcRPBQ9wDAMEqk0dsjkttGXMqZ2OP/ZspUfTpnOx/U7+MPdt7HozXdZsXYDsYiLUgopBFIKoo7Dxo+37cqOhxIAIQRCQFNrnGHHDmLqzdcSdR3unfUE8195gytHnMejUyewces2ps39C1LKYsen20qh69jE0+lOS4D7DUAKQaAUqUyWm0Z+m3GjL2PBoiVMf/xZWlNpLNvilOMHsez91dzxuz/hK8XRfWrYtG0HUgq01pimgWOFiafSnToQmftjvBcEqCBgxvgbOfe0E7n9/lksXPIWZZEIZVEXP1DcM+sJfD8glc1x4ekn85Mrarl60q+LwR42TaxwiGQqg5CysyKgYwCEEPhKgdY8cuet9Kvpxajx97BuSx1VFeUopQiCtpImBI5tkfM8YhGXQBeuGYZBECgcK0zYNEik0xhCdFoS6JgHaE0+7zHzjps5omc1l98+leZkisryGH4Q7OV2TaAUUdchnc3j+T6WFUbpAgApJal0FillpyXBdpdBQ0pakynGXv5dThg0gGvvuo+WVIqY6+zV+N0hxCIumVyOQCmEECilcWwLISTpbLaQFzqUfNs+B8sDhBBkcnkGHlnDNRddwMQHZlP3SROVZbF9Gr/zCWOuQzqTKY68Sikijo3SinQ2hxByH4YWWgetdSHElEJrjUAgZKHrLPymRgjRYW3BbG/iy2RzDD/9FNZvqeP15auoiEX3bfxutT3muiTTWTSFB1daE3UKnpPN55Gy8DalLIAIlCKX98h7XiGnCAiHTBzLwrXCmKaJUoqc55NIpdFoXNsm53mETfOLyQEaTY+qSuo/aSTv+0gpUKp93hN1beoamorfKaWIRRw8L8APFKZhkPc8Mrk8Kih4R58e1QzsW8Ogfn3o3+cIeldXUh6NYoVNDClRWuP7AS3xFI8teIlFy96jprqS7U0tRZAHFIBhGLz74VomXHcFPbtV0JrOEHXsfcd/m/e4jk0ynW4DUrhWHo2QzmZpbG7Btix6d6/i5MED+frQYxkysD/VFWV4fsD2pmY2123nn+99wPbGJloSKfKeh2kY2OEQ53/tZFzbZthxg3hy2iTunf0kf5y/kPJohKAdb6hdAAKliLkOLy99m0vOP5PZU8Zzw5TptCZTlEcjnwlBa41pGLiWTSKVwTQMpBTk0hkMo/CWas85nVHDz+WYo44kUAFrNm7h+cVLWfnRBjbWbaOpNUHO89AahBTIttyw05P+9sabCCGoLIsx4/Fn2VS/HcMw2p0LRHsPSAgh8Hwfxwrz0M9v4Ss9uzNhxmz+tepDKsqixdj+3+V5Pk9Nm8STL7zK0wtfJVoW5bj+fRl7RS2nDjmG1niSt/+9hlfeXM6Kj9bT0NRCoDVh0yQcDhWgCVGUzPRelGUA3/dJpjOEQyEc22o3gPbngLaHyuTyXH/3dG4fM4q5905kzvyFPPT0AgzDIBwK7Zr62qBZ4RBh06S5Nc7Zw4YybvRl9DuiF0JKXl+2gskPP0YilUEYEscKUxaLthmmi9k/aIcxUkq6lcfQSndovDbcrw78RfsTIW1uLPnH0uWs2bCJcVdfylknDeG1t1aQyuUIGUbxvlQmiyEEI791FucNO5Hac8/gg/UbmTh9FtXdymiKJ3lpyTJ6VHUjZJoFXVDrts/+yI26w/1Uh/UApQu1vLKijNeWr+LicXfh2DZzp04gatsESiGlpLE1zlG9e3D/+Bvp3aOa5R+u5aqf/YqfzpjN2s1bKY9GyWRzmKZJEChUW30/JAQRrQs6X7dYlJZUmjF3TsMMmUy64Sqa4wmy2Rw/HnUR834zmcryGM0tcWY+9Vc21G2jqqIc13VwLIvWZIrOXp9LEfKDANe2SWVz3DdnHmeeNISzhh7P7Mm38oPLRjDpwUe5c+actvHXxLVtPN/HkJLysiipTBbBIb43GChFxHV4b806GppbmPPLieQ8j9pbJvPC4qX0rK5CaU0qmy22xkIK6nd8Qn1DI6bZeaPwAZHEhBAkEklGjzifmp7dmf308zw47zkirkMkGiFiW3i+Tz7vFXt10zCY9Pu5BErh2vYeleOQ8gApJS3xBDeN/A53jb2G+oZG5i54mYjrYIVC5H2fqGuTz3vkd9v8EEL8/zmiqwMwDElzPMGNoy7iuksuJJ5I8frbK0llsoRMo5jVoxGXTC6PHwR7/Jno5HMBnwuAYUiaW5OM/OY3GFM7nMXLVpBIppj34qKC4KH0blqAU9ACAgVdxOjPBWCnijP06P5MvO57PPPiIk474VjmPPcSm7Y3YIVChXoudo3Chd0fTdczfz8ABEphhUwmj/0+S5av4pzTTmTZqtXMe/k1KmLRXRNYW2qPui7JdAZN1zyT3SEAhpTEkymuv/hCenTrxuABfWlsSXD3I38mFnE/1cnt1AIS6cweCtEhCUAIQSafZ3C/Plx6wdlUV1awuX4Ht973MIYhi3383rSA4vZXF3QCs/2xL8hmc5wx9Hhqulfx6PyFzJz3HEJKQobxqQlMa41hSFzLKmj/QnTJEGg3gIJU5fDqsndZuXY9Kz5aj2NbRXlqb5NZyDCxw2ES6XSnH4c7AJogmKZBQ3Mr9Q1NRCMuWqvPnL133h91bZLpzt39OSCK0B5yddtY3J7ReciAfmys2048ncaQ8tD1gP0RHaQQvLN6HVbIxOyiHmB+0X8QcSy06qpdwEEAsLMt7qqrdFq8BKAEoASgBKAEoASgBOCwXf8Fo1NMfAC0Fl0AAAAASUVORK5CYII="><rect width='32' height='32' rx='6' fill='%2313474A'/><text x='16' y='22' font-family='Georgia,serif' font-size='18' font-weight='bold' fill='%23F1CC6C' text-anchor='middle'>S</text></svg>">
   <link rel="alternate icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA">
@@ -479,22 +486,22 @@
 </head>
 <body>
 
-<div id="savesPanel" style="display:none;position:fixed;top:48px;right:0;width:400px;max-height:85vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:0 0 0 12px;box-shadow:0 4px 24px rgba(0,0,0,0.18);z-index:250;padding:0;">
+<div id="historyPanel" style="display:none;position:fixed;top:48px;right:0;width:400px;max-height:85vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:0 0 0 12px;box-shadow:0 4px 24px rgba(0,0,0,0.18);z-index:250;padding:0;">
   <div style="padding:14px 16px 0;display:flex;justify-content:space-between;align-items:center;">
     <span style="font-size:14px;font-weight:700;">History</span>
     <button onclick="toggleHistoryPanel()" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--muted);">✕</button>
   </div>
-  <div id="savesTabBar" style="display:flex;gap:0;padding:10px 16px 0;border-bottom:2px solid var(--border);">
+  <div id="historyTabBar" style="display:flex;gap:0;padding:10px 16px 0;border-bottom:2px solid var(--border);">
     <button class="saves-tab active" data-tab="shares" onclick="switchSavesTab('shares')">Shared Links</button>
     <button class="saves-tab" data-tab="drafts" onclick="switchSavesTab('drafts')">Saved Newsletters</button>
     <button class="saves-tab" data-tab="auto" onclick="switchSavesTab('auto')">Auto-Drafts</button>
   </div>
-  <div id="savesTypeFilter" style="display:flex;gap:0;padding:8px 16px 0;">
+  <div id="historyTypeFilter" style="display:flex;gap:0;padding:8px 16px 0;">
     <button class="saves-type-btn active" data-filter="both" onclick="filterSavesType('both')">All</button>
     <button class="saves-type-btn" data-filter="all" onclick="filterSavesType('all')">All Entities</button>
     <button class="saves-type-btn" data-filter="p3spv" onclick="filterSavesType('p3spv')">proof3+SPV1</button>
   </div>
-  <div id="savesList" style="padding:8px 16px 16px;"></div>
+  <div id="historyList" style="padding:8px 16px 16px;"></div>
 </div>
 <div class="top-bar" id="globalTopBar">
   <div class="top-bar-logo">
@@ -521,7 +528,7 @@
     <button class="top-bar-btn" id="editToggleBtn" onclick="toggleEdit()">Edit</button>
     <button class="top-bar-btn" id="rerenderBtn" onclick="reRenderCharts()" title="Re-render blank charts">&#8635; Charts</button>
     <button class="top-bar-btn" id="chartPickerBtn" onclick="toggleChartPicker()">&#9783; Chart Picker</button>
-    <button class="top-bar-btn" id="savesPanelBtn" onclick="toggleHistoryPanel()">&#128190; History</button>
+    <button class="top-bar-btn" id="historyPanelBtn" onclick="toggleHistoryPanel()">&#128190; History</button>
     <button class="top-bar-btn" onclick="saveToCloud()">Save</button>
     <button class="top-bar-btn" onclick="copyNewsletter()">Copy</button>
     <button class="top-bar-btn" onclick="exportToDoc()">Doc</button>
@@ -609,12 +616,12 @@
         </div>
         <!-- export buttons moved to sticky header above -->
         <!-- Saves panel -->
-        <div id="savesPanel" style="display:none;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:720px;">
+        <div id="historyPanel" style="display:none;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:720px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Saved Newsletters</div>
             <div style="font-size:10px;color:var(--muted);">Auto-saved to this browser</div>
           </div>
-          <div id="savesList"></div>
+          <div id="historyList"></div>
         </div>
         <!-- Chart picker panel -->
         <div id="chartPickerPanel" style="display:none;position:fixed;top:48px;right:80px;width:340px;max-height:75vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:0 0 12px 12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);z-index:250;padding:0;">
@@ -1576,7 +1583,7 @@ function buildTOC(container) {
   }
   if (!headers.length) return null;
   var toc = document.createElement('div'); toc.className = 'newsletter-toc'; toc.id = 'newsletter-toc';
-  var ttl = document.createElement('div'); ttl.className = 'newsletter-toc-title'; ttl.textContent = 'Contents';
+  var ttl = document.createElement('div'); ttl.className = 'newsletter-toc-title'; ttl.textContent = 'Clickable Contents';
   toc.appendChild(ttl);
   for (var i = 0; i < headers.length; i++) {
     var h = headers[i], anchor = 'section-' + i; h.id = anchor;
@@ -1941,6 +1948,7 @@ async function shareNewsletter() {
         text:         content,
         charts:       allCharts[currentType] || [],
         customCharts: customCharts[currentType] || [],
+        inlineCharts: _pendingInlineCharts || (allCharts[currentType] || []).concat(customCharts[currentType] || []),
         type:         currentType,
         title:        brand + ' Investor Newsletter — ' + monthLabel,
         name:         monthLabel,
@@ -2057,8 +2065,15 @@ async function shareNewsletter() {
       if (data.customCharts && data.customCharts.length) {
         customCharts[type] = data.customCharts;
       }
-      /* Rebuild _pendingInlineCharts from allCharts+customCharts for re-rendering */
-      var allForRender = (allCharts[type] || []).concat(customCharts[type] || []);
+      /* Rebuild _pendingInlineCharts - prefer saved inlineCharts (exact match to saved HTML), fall back to combined arrays */
+      var allForRender;
+      if (data.inlineCharts && data.inlineCharts.length) {
+        allForRender = data.inlineCharts;
+        console.log('[investor] using saved inlineCharts:', allForRender.length);
+      } else {
+        allForRender = (allCharts[type] || []).concat(customCharts[type] || []);
+        console.log('[investor] using concat fallback:', allForRender.length);
+      }
       _pendingInlineCharts = allForRender;
       /* Re-render canvases inside the newsletter HTML */
       requestAnimationFrame(function() {
@@ -2227,7 +2242,11 @@ function getSeriesColor(si, s, brand) {
 }
 
 function renderSingleChart(canvas, chart) {
-  if (!chart || !chart.data || !chart.series || !chart.data.length) return null;
+  console.log('[renderSingleChart] called with:', { type: chart && chart.type, title: chart && chart.title, dataLen: chart && chart.data && chart.data.length, seriesCount: chart && chart.series && chart.series.length });
+  if (!chart || !chart.data || !chart.series || !chart.data.length) {
+    console.warn('[renderSingleChart] EARLY RETURN: invalid chart', { hasChart: !!chart, hasData: chart && !!chart.data, hasSeries: chart && !!chart.series, dataLen: chart && chart.data && chart.data.length });
+    return null;
+  }
 
   /* Destroy any existing instance on this canvas first */
   destroyChart(canvas.id);
@@ -2235,7 +2254,11 @@ function renderSingleChart(canvas, chart) {
   var colors = getColors();
   var brand  = document.documentElement.getAttribute('data-brand');
   var labels = chart.data.map(function(d) { return (typeof d === 'string') ? d : (d.date || d.month || ''); });
-  var chartType = chart.type === 'area' ? 'line' : (chart.type || 'bar');
+  var chartType;
+  if (chart.type === 'area') chartType = 'line';
+  else if (chart.type === 'multi') chartType = 'line';  /* multi = multiple lines on one axis */
+  else if (chart.type === 'dual') chartType = 'line';   /* should never reach here, but safety */
+  else chartType = chart.type || 'bar';
 
   /* === DUAL Y-AXIS (type: 'dual') === */
   if (chart.type === 'dual' && chart.series.length >= 2) {
@@ -3121,25 +3144,29 @@ async function buildCustomChart() {
   }
 
   var s1 = extractSeries(m1);
+  console.log('[buildCustomChart] m1:', m1.name, 'rows:', m1.sourceRows.length, 'extracted:', s1.labels.length, 'values:', s1.values.slice(0,3));
   if (!s1.labels.length) { showStatus('error', 'No data found for the selected date range.'); return; }
 
   var chartDef = {
-    title: (isDual ? axisLabel1 + ' vs ' + axisLabel2 : m1.name).toUpperCase() +
+    title: (isDual ? axisLabel1 + ' vs ' + axisLabel2 : (isMulti ? axisLabel1 + ' + others' : m1.name)).toUpperCase() +
            ' — ' + startKey.toUpperCase() + ' TO ' + endKey.toUpperCase(),
-    type: ctype,  /* keep 'dual' as 'dual' so renderDualAxisChart is triggered */
+    type: ctype,
     data: s1.labels,
     series: [{ label: axisLabel1 || m1.name, values: s1.values }]
   };
 
   if (m2) {
     var s2 = extractSeries(m2);
+    console.log('[buildCustomChart] m2:', m2.name, 'rows:', m2.sourceRows.length, 'extracted:', s2.labels.length, 'values:', s2.values.slice(0,3));
     chartDef.series.push({ label: axisLabel2 || m2.name, values: s2.values });
   }
   if (m3) {
     var s3 = extractSeries(m3);
     var label3El = document.getElementById('chartBuilderLabel3');
+    console.log('[buildCustomChart] m3:', m3.name, 'rows:', m3.sourceRows.length, 'extracted:', s3.labels.length, 'values:', s3.values.slice(0,3));
     chartDef.series.push({ label: (label3El ? label3El.value.trim() : m3.name), values: s3.values });
   }
+  console.log('[buildCustomChart] FINAL chartDef:', { type: chartDef.type, title: chartDef.title, seriesCount: chartDef.series.length, series: chartDef.series.map(function(s){ return { label: s.label, valsLen: s.values && s.values.length }; }) });
   if (isDual) chartDef.dualAxis = true;
 
   if (!customCharts[currentType]) customCharts[currentType] = [];
