@@ -965,6 +965,18 @@ var CONTEXT_FIELDS = {
   ],
   spv1: [
     { id:'p3Notes', label:'Other Important proof3 Notes', type:'textarea', rows:2, placeholder:'e.g. SPV1 convertible notes $378k, 4 investors, 8% simple interest. Any other key context for investors.' }
+  ],
+  /* proof3+SPV1 — new v7 structure mirroring All Entities architecture */
+  proof3_v7: [
+    { id:'p3Gym1Target',         label:'Gym Member Target', type:'number', placeholder:'100' },
+    { id:'p3CoachingTarget',     label:'p3c Client Target', type:'number', placeholder:'350' },
+    { id:'p3OneSentenceSummary', label:'One Sentence Summary', type:'textarea', rows:2, placeholder:'e.g. Gym at 91 members and trending toward breakeven, coaching MRR steady, burn down 12%.' },
+    { id:'p3TopOfMind',          label:'Top of Mind for Jim', type:'textarea', rows:4, placeholder:'CEO brain dump — what occupies your headspace this month on the proof3 side. Strategy, risks, big bets, lessons.' },
+    { id:'p3RolledFinancial',    label:'proof3 Rolled Up Financial Updates', type:'textarea', rows:3, placeholder:'e.g. Total proof3 revenue $58k, expenses $72k, net -$14k. Cash position $X. Path to breakeven Y months.' },
+    { id:'p3GymsOps',            label:'proof3 Gyms Operational Update', type:'textarea', rows:3, placeholder:'e.g. Gym 1 at 91 members (+5 MoM). 8 trial members in pipeline. Gym 2 lease in negotiation.' },
+    { id:'p3CoachingOps',        label:'proof3 Online Coaching Operational Update', type:'textarea', rows:3, placeholder:'e.g. 312 active clients, MRR $X, churn 4%, NPS 67. Two new programs launched.' },
+    { id:'p3TopFocus',           label:'Top Focus', type:'textarea', rows:3, placeholder:'e.g. Hit 100 gym members. Close gym 2 lease. Hire coaching ops lead.' },
+    { id:'p3Supporting',         label:'Any Additional Supporting Information', type:'textarea', rows:3, placeholder:'Anything else worth weaving into the newsletter where it fits.' }
   ]
 };
 
@@ -1002,11 +1014,9 @@ function renderContextFields(type) {
   if (type === 'all') {
     fields = CONTEXT_FIELDS.sagehouse_v7.slice();
   }
-  /* proof3+SPV1: existing fields (will be updated by user soon) */
+  /* proof3+SPV1: use NEW 9-field structure (v7) */
   else if (type === 'p3spv') {
-    fields = fields.concat(CONTEXT_FIELDS.proof3gym);
-    fields = fields.concat(CONTEXT_FIELDS.shared);
-    fields = fields.concat(CONTEXT_FIELDS.spv1);
+    fields = CONTEXT_FIELDS.proof3_v7.slice();
   }
   var saved = {};
   var existing = document.querySelectorAll('#contextFieldsContainer input, #contextFieldsContainer textarea');
@@ -1370,6 +1380,18 @@ function buildContext() {
       p3Ops:              getVal('sgP3Ops'),
       topFocus:           getVal('sgTopFocus'),
       supporting:         getVal('sgSupporting')
+    },
+    /* NEW proof3+SPV1 (v7) fields */
+    p3: {
+      gym1Target:         getVal('p3Gym1Target'),
+      coachingTarget:     getVal('p3CoachingTarget'),
+      oneSentenceSummary: getVal('p3OneSentenceSummary'),
+      topOfMind:          getVal('p3TopOfMind'),
+      rolledFinancial:    getVal('p3RolledFinancial'),
+      gymsOps:            getVal('p3GymsOps'),
+      coachingOps:        getVal('p3CoachingOps'),
+      topFocus:           getVal('p3TopFocus'),
+      supporting:         getVal('p3Supporting')
     }
   };
 }
@@ -2868,17 +2890,17 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     if (sg.topFocus)           lines.push('\nTOP FOCUS:\n' + sg.topFocus);
     if (sg.supporting)         lines.push('\nADDITIONAL SUPPORTING INFO (weave the spirit of this into the most appropriate sections — do not include verbatim, do not give it its own header):\n' + sg.supporting);
   } else {
-    /* proof3+SPV1: existing fields */
-    if (g.memberStory)        lines.push('Member story:\n' + g.memberStory);
-    if (g.gym1Target)         lines.push('Gym 1 member target: ' + g.gym1Target);
-    if (g.p3cTarget)          lines.push('p3 Coaching client target: ' + g.p3cTarget);
-    if (ctx.portfolio)                lines.push('\nPortfolio company updates:\n' + ctx.portfolio);
-    if (ctx.financialHighlights)      lines.push('\nFinancial highlights:\n' + ctx.financialHighlights);
-    if (ctx.tshHighlights)            lines.push('\nTSH-specific highlights:\n' + ctx.tshHighlights);
-    if (ctx.p3Highlights)             lines.push('\nproof3-specific highlights:\n' + ctx.p3Highlights);
-    if (ctx.p3notes)                  lines.push('\nOther proof3 notes:\n' + ctx.p3notes);
-    if (ctx.unusual)                  lines.push('\nUnusual items:\n' + ctx.unusual);
-    if (ctx.focus)                    lines.push('\nJim is focused on:\n' + ctx.focus);
+    /* proof3+SPV1 — NEW v7 structure (parallel to All Entities) */
+    var p3 = ctx.p3 || {};
+    if (p3.oneSentenceSummary) lines.push('ONE-SENTENCE SUMMARY (use this exact spirit verbatim as the newsletter dek/subtitle):\n' + p3.oneSentenceSummary);
+    if (p3.topOfMind)          lines.push('\nTOP OF MIND FOR JIM (his CEO brain dump on proof3 — weave into the Top of Mind section):\n' + p3.topOfMind);
+    if (p3.gym1Target)         lines.push('\nGYM 1 MEMBER TARGET: ' + p3.gym1Target);
+    if (p3.coachingTarget)     lines.push('p3 COACHING CLIENT TARGET: ' + p3.coachingTarget);
+    if (p3.rolledFinancial)    lines.push('\nproof3 ROLLED-UP FINANCIAL UPDATES:\n' + p3.rolledFinancial);
+    if (p3.gymsOps)            lines.push('\nproof3 GYMS OPERATIONAL UPDATE:\n' + p3.gymsOps);
+    if (p3.coachingOps)        lines.push('\nproof3 ONLINE COACHING OPERATIONAL UPDATE:\n' + p3.coachingOps);
+    if (p3.topFocus)           lines.push('\nTOP FOCUS:\n' + p3.topFocus);
+    if (p3.supporting)         lines.push('\nADDITIONAL SUPPORTING INFO (weave the spirit of this into the most appropriate sections — do not include verbatim, do not give it its own header):\n' + p3.supporting);
   }
   var opCtx = lines.join('\n');
 
@@ -2887,6 +2909,40 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
   var MNAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var monthYearLabel = MNAMES[nowD.getMonth()] + ' ' + nowD.getFullYear();
   var h1Title = type === 'all' ? 'The SageHouse + proof3 Newsletter' : 'proof3 + SPV1 Newsletter';
+
+  /* H2 section names per type — drives FORMAT spec and chart placement instructions */
+  var h2List, chartPlacement;
+  if (type === 'all') {
+    h2List = [
+      'Top of Mind for Jim',
+      'Portfolio Company Updates',
+      'TSH + proof3 Rolled Up Financial Updates',
+      'TSH Operational Update',
+      'proof3 Operational Update',
+      'Top Focus'
+    ];
+    chartPlacement =
+      '   - Financial/revenue/expense/cash/profit charts → under "## TSH + proof3 Rolled Up Financial Updates"\n' +
+      '   - TSH operational charts (advisory revenue, portfolio metrics) → under "## TSH Operational Update"\n' +
+      '   - proof3 operational charts (gym members, coaching clients, gym revenue) → under "## proof3 Operational Update"\n' +
+      '   - If a chart could fit two sections, prefer the more specific (operational) one.\n';
+  } else {
+    /* proof3+SPV1 — parallel 5-H2 structure */
+    h2List = [
+      'Top of Mind for Jim',
+      'proof3 Rolled Up Financial Updates',
+      'proof3 Gyms Operational Update',
+      'proof3 Online Coaching Operational Update',
+      'Top Focus'
+    ];
+    chartPlacement =
+      '   - Financial/revenue/expense/cash/profit charts → under "## proof3 Rolled Up Financial Updates"\n' +
+      '   - Gym member/visit/retention charts → under "## proof3 Gyms Operational Update"\n' +
+      '   - Coaching client/MRR/churn charts → under "## proof3 Online Coaching Operational Update"\n' +
+      '   - If a chart could fit two sections, prefer the more specific (operational) one.\n';
+  }
+  var h2Block = '';
+  for (var hi = 0; hi < h2List.length; hi++) h2Block += '   ## ' + h2List[hi] + '\n';
   var isP3 = type === 'p3spv';
   var cc = isP3 ? '"#3d9cb5" primary, "#a8d4e0" secondary' : '"#13474A" primary, "#F1CC6C" secondary';
   var ex = co + '\n{"type":"bar","title":"Monthly Revenue","data":[{"date":"Jan 25","value":45000}],"series":[{"key":"value","name":"Revenue","color":"#13474A"}]}\n' + fc;
@@ -2914,19 +2970,11 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     '1. Begin with H1: # ' + h1Title + '\n' +
     '2. Immediately below H1, on its own line: ' + monthYearLabel + '  (NO heading marks — this is a subtitle date)\n' +
     '3. Blank line, then a single-paragraph ONE-SENTENCE SUMMARY (the dek). Use the One-Sentence Summary input above as the source of truth. NO heading mark; render as italic emphasis if natural.\n' +
-    '4. Blank line, then 6 ## H2 sections in this EXACT order and with these EXACT names:\n' +
-    '   ## Top of Mind for Jim\n' +
-    '   ## Portfolio Company Updates\n' +
-    '   ## TSH + proof3 Rolled Up Financial Updates\n' +
-    '   ## TSH Operational Update\n' +
-    '   ## proof3 Operational Update\n' +
-    '   ## Top Focus\n' +
+    '4. Blank line, then ' + h2List.length + ' ## H2 sections in this EXACT order and with these EXACT names:\n' +
+    h2Block +
     '5. Each H2 has 2-4 short paragraphs (no bullet lists).\n' +
     '6. Include EXACTLY 4 chart JSON blocks — no more, no fewer. Place each chart UNDER the most appropriate H2:\n' +
-    '   - Financial/revenue/expense/cash/profit charts → under "## TSH + proof3 Rolled Up Financial Updates"\n' +
-    '   - TSH operational charts (advisory revenue, portfolio metrics) → under "## TSH Operational Update"\n' +
-    '   - proof3 operational charts (gym members, coaching clients, gym revenue) → under "## proof3 Operational Update"\n' +
-    '   - If a chart could fit two sections, prefer the more specific (operational) one.\n' +
+    chartPlacement +
     '7. 1-2 sentences before each chart explaining the so-what (not what the chart shows).\n' +
     '8. Total word count for prose: 700-900 words across all sections combined.\n\n' +
     'CHART RULES - CRITICAL:\n' +
