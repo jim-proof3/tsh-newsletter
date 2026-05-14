@@ -526,11 +526,16 @@
           }
         }
         
-        /* Chart canvases must fill embed container for responsive sizing */
-        .chart-embed canvas { width: 100% !important; height: auto !important; max-height: 400px; }
-        .chart-card canvas { width: 100% !important; height: auto !important; }
+        /* Chart sizing: container has fixed height, Chart.js fills it */
+        .chart-embed { min-height: 320px; }
+        .chart-embed canvas { max-height: 400px; }
+        .chart-card { min-height: 280px; }
+        .chart-card canvas { max-height: 280px; }
         @media (max-width: 600px) {
+          .chart-embed { min-height: 240px; }
           .chart-embed canvas { max-height: 280px; }
+          .chart-card { min-height: 220px; }
+          .chart-card canvas { max-height: 220px; }
         }
         </style>
   <link rel="icon" id="pageFavicon" type="image/png" href="https://jim-proof3.github.io/tsh-newsletter/sh-logo.png">
@@ -2601,6 +2606,7 @@ function renderSingleChart(canvas, chart) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        aspectRatio: 2,
         backgroundColor: colors.chartBg,
         plugins: {
           legend: { display: datasets.length > 1, position: 'bottom',
@@ -2655,6 +2661,7 @@ function renderDualAxisChart(canvas, chart, labels, colors, brand) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        aspectRatio: 2,
         plugins: {
           legend: { display: true, position: 'bottom',
             labels: { font:{size:10}, boxWidth:10, padding:10, color: colors.text } },
