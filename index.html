@@ -866,6 +866,29 @@ function setFavicon(brand) {
   var el = document.getElementById('pageFavicon');
   if (el) el.setAttribute('href', brand === 'proof3' ? FAVICON_P3 : FAVICON_SH);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * THE SINGLE SOURCE OF TRUTH for changing currentType.
+ * 
+ * Anywhere that mutates currentType MUST go through this function.
+ * Anywhere that needs to set favicon/title based on type MUST NOT call
+ * setFavicon/setTitle directly - call setCurrentType instead.
+ * 
+ * This guarantees: type change → localStorage + favicon + title stay in sync.
+ * ════════════════════════════════════════════════════════════════════════ */
+function setCurrentType(type) {
+  if (type !== 'all' && type !== 'p3spv') return; /* validate */
+  currentType = type;
+  try { localStorage.setItem('sh_current_type', type); } catch(e) {}
+  var cfg = SHEET_CONFIGS[type] || {};
+  setFavicon(cfg.brand || 'sagehouse');
+  setTitle(type);
+  /* data-brand attribute for CSS theming */
+  try {
+    document.documentElement.setAttribute('data-brand', cfg.brand || 'sagehouse');
+    document.body.setAttribute('data-brand', cfg.brand || 'sagehouse');
+  } catch(e) {}
+}
 /* Fixed KV keys for auto-saves - same key = always overwritten = latest version */
 var AUTOSAVE_KV_ID = { all: 'autosave-all-entities', p3spv: 'autosave-p3spv' };
 var DATA_SHEET_ID = '1NDhm82bK-tyOtkyyZjGRB0SQpbwMeRmZ6yOazQ-BILo';
@@ -1005,8 +1028,7 @@ function setType(type, cardEl) {
       if (body) { body.contentEditable = 'false'; body.style.outline = 'none'; body.style.cursor = 'default'; }
     }
   }
-  currentType = type;
-  try { localStorage.setItem('sh_current_type', type); } catch(e) {}
+  setCurrentType(type);
   var cfg = SHEET_CONFIGS[type];
   /* Sync both sidebar type cards and top bar type buttons */
   var cards = document.querySelectorAll('.type-card');
@@ -1022,8 +1044,7 @@ function setType(type, cardEl) {
   var lSH = document.getElementById('topBarLogoSH'), lP3 = document.getElementById('topBarLogoP3');
   if (lSH) lSH.style.display = cfg.brand === 'proof3' ? 'none' : 'block';
   if (lP3) lP3.style.display = cfg.brand === 'proof3' ? 'block' : 'none';
-  setFavicon(cfg.brand);
-  setTitle(type);
+  /* setFavicon and setTitle handled by setCurrentType above */
   saveContextFields(); /* save current type's fields before switching */
   renderContextFields(type); /* restoreContextFields called inside renderContextFields */
   var cp = document.getElementById('chartPickerPanel'); if (cp) cp.style.display = 'none';
@@ -1050,8 +1071,8 @@ function setType(type, cardEl) {
   renderContextFields(currentType);
   restoreContextFields();
   setupContextFieldPersistence();
-  setFavicon((SHEET_CONFIGS[currentType]||{}).brand || 'sagehouse');
-  setTitle(currentType);
+  /* Apply UI state for currentType (already read from localStorage at declaration) */
+  setCurrentType(currentType);
   /* Load unified charts model, falling back to migration from old custom charts */
   (async function() {
     try {
@@ -2364,10 +2385,8 @@ async function shareNewsletter() {
   if (editTb) editTb.style.display = 'none';
   var type = params.get('type') || 'all';
   var cfg  = SHEET_CONFIGS[type] || { label:'Newsletter', brand:'sagehouse' };
-  document.documentElement.setAttribute('data-brand', cfg.brand);
-  document.body.setAttribute('data-brand', cfg.brand);
-  setFavicon(cfg.brand);
-  setTitle(type);
+  /* Use single source of truth — sets currentType, favicon, title, data-brand */
+  setCurrentType(type);
   var spacer = document.querySelector('.top-bar-spacer');
   var investorTitleEl = null;
   if (spacer) {
@@ -2920,8 +2939,7 @@ async function restoreAutoSaves() {
             customCharts[type] = data.customCharts;
           }
           kvRestored.push((SHEET_CONFIGS[type]||{}).label || type);
-          setFavicon((SHEET_CONFIGS[type]||{}).brand || 'sagehouse');
-          setTitle(type);
+          /* DO NOT touch favicon/title — restore loop iterates all types */
           try { localStorage.setItem(AUTOSAVE_KEY_PREFIX + type, JSON.stringify({
             text: data.text, rawMarkdown: data.rawMarkdown || null,
             savedAt: data.savedAt, type: type,
