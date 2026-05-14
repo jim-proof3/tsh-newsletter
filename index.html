@@ -1003,11 +1003,155 @@ function setType(type, cardEl) {
   setupContextFieldPersistence();
   setFavicon((SHEET_CONFIGS[currentType]||{}).brand || 'sagehouse');
   setTitle(currentType);
-  /* Load custom charts from KV on page load */
-  loadCustomChartsFromKV('all');
-  loadCustomChartsFromKV('p3spv');
-  restoreAutoSaves();
+  /* Load unified charts model, falling back to migration from old custom charts */
+  (async function() {
+    try {
+      var hasAll = await loadUnifiedChartsFromKV('all');
+      var hasP3 = await loadUnifiedChartsFromKV('p3spv');
+      if (!hasAll || !hasP3) {
+        console.log('[init] running one-time migration from customCharts');
+        await migrateChartsModel();
+        await saveUnifiedChartsToKV('all');
+        await saveUnifiedChartsToKV('p3spv');
+      }
+    } catch(e) { console.error('[init] unified charts load/migrate failed:', e); }
+    try { await restoreAutoSaves(); } catch(e) { console.error('[init] restoreAutoSaves failed:', e); }
+    /* Re-render newsletter inline charts so saved canvases come alive */
+    try {
+      var nlBody = document.getElementById('newsletterBody');
+      if (nlBody && nlBody.innerHTML && allCharts[currentType] && allCharts[currentType].length) {
+        var charts = (selectedCharts[currentType] && selectedCharts[currentType].length) ? selectedCharts[currentType] : allCharts[currentType];
+        _pendingInlineCharts = charts;
+        var canvases = nlBody.querySelectorAll('.chart-embed canvas');
+        for (var ci = 0; ci < canvases.length; ci++) {
+          (function(cv, idx) {
+            if (charts[idx]) setTimeout(function() { destroyChart(cv.id); renderSingleChart(cv, charts[idx]); }, 80 * idx);
+          })(canvases[ci], ci);
+        }
+      }
+    } catch(e) { console.error('[init] inline re-render failed:', e); }
+    if (typeof renderChartsTab === 'function') { try { renderChartsTab(); } catch(e) {} }
+  })();
 })();
+
+
+/* === ONE-TIME MIGRATION: merge customCharts into allCharts === */
+async function migrateChartsModel() {
+  var types = ['all', 'p3spv'];
+  for (var ti = 0; ti < types.length; ti++) {
+    var type = types[ti];
+
+    /* Source 1: localStorage 'sh_custom_charts_TYPE' */
+    var localCustom = [];
+    try {
+      var ls = localStorage.getItem('sh_custom_charts_' + type);
+      if (ls) localCustom = JSON.parse(ls) || [];
+    } catch(e) {}
+
+    /* Source 2: dedicated KV custom-charts-TYPE */
+    var kvCustom = [];
+    try {
+      var resp = await fetch(WORKER_URL + '/newsletter?id=custom-charts-' + type);
+      if (resp.ok) {
+        var data = await resp.json();
+        if (data && data.charts && data.charts.length) kvCustom = data.charts;
+      }
+    } catch(e) {}
+
+    /* Use whichever has more (most recent) */
+    var customSource = (kvCustom.length >= localCustom.length) ? kvCustom : localCustom;
+    if (!customSource.length) continue;
+
+    /* Initialize allCharts[type] if needed */
+    if (!allCharts[type]) allCharts[type] = [];
+
+    /* Merge - avoid duplicates by title */
+    var existing = allCharts[type].map(function(c) { return c && c.title; });
+    for (var ci = 0; ci < customSource.length; ci++) {
+      var ch = customSource[ci];
+      if (ch && ch.title && existing.indexOf(ch.title) < 0) {
+        allCharts[type].push(ch);
+      }
+    }
+
+    console.log('[migrate] type', type, '- merged', customSource.length, 'custom charts into allCharts, total now:', allCharts[type].length);
+
+    /* selectedCharts gets all charts by default if not already populated */
+    if (!selectedCharts[type] || !selectedCharts[type].length) {
+      selectedCharts[type] = allCharts[type].slice();
+    }
+  }
+
+  /* Clear deprecated customCharts memory */
+  customCharts.all = [];
+  customCharts.p3spv = [];
+}
+
+/* === Save the unified charts model to KV === */
+async function saveUnifiedChartsToKV(type) {
+  var charts = allCharts[type] || [];
+  var selected = selectedCharts[type] || [];
+  /* selectedCharts stored as indices into allCharts */
+  var selectedIdx = selected.map(function(c) { return charts.indexOf(c); }).filter(function(i) { return i >= 0; });
+
+  try {
+    localStorage.setItem('sh_unified_charts_' + type, JSON.stringify({ charts: charts, selectedIdx: selectedIdx }));
+  } catch(e) {}
+
+  try {
+    await fetch(WORKER_URL + '/newsletter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'charts-' + type,
+        text: '[]',
+        charts: charts,
+        selectedIdx: selectedIdx,
+        type: type,
+        title: 'Unified Charts — ' + type,
+        autoSave: false,
+        saveType: 'unified-charts',
+        savedAt: new Date().toISOString()
+      })
+    });
+  } catch(e) { console.log('Unified charts KV save error:', e); }
+}
+
+async function loadUnifiedChartsFromKV(type) {
+  /* Try KV first (source of truth) */
+  try {
+    var resp = await fetch(WORKER_URL + '/newsletter?id=charts-' + type);
+    if (resp.ok) {
+      var data = await resp.json();
+      if (data && data.charts && data.charts.length) {
+        allCharts[type] = data.charts;
+        var selIdx = data.selectedIdx || [];
+        selectedCharts[type] = selIdx.map(function(i) { return data.charts[i]; }).filter(Boolean);
+        if (!selectedCharts[type].length) selectedCharts[type] = data.charts.slice();
+        try { localStorage.setItem('sh_unified_charts_' + type, JSON.stringify({ charts: data.charts, selectedIdx: selIdx })); } catch(e) {}
+        console.log('[unified] loaded from KV for', type, ':', data.charts.length, 'charts,', selectedCharts[type].length, 'selected');
+        return true;
+      }
+    }
+  } catch(e) {}
+  /* Fall back to localStorage */
+  try {
+    var ls = localStorage.getItem('sh_unified_charts_' + type);
+    if (ls) {
+      var parsed = JSON.parse(ls);
+      if (parsed && parsed.charts && parsed.charts.length) {
+        allCharts[type] = parsed.charts;
+        var lsi = parsed.selectedIdx || [];
+        selectedCharts[type] = lsi.map(function(i) { return parsed.charts[i]; }).filter(Boolean);
+        if (!selectedCharts[type].length) selectedCharts[type] = parsed.charts.slice();
+        console.log('[unified] loaded from localStorage for', type, ':', parsed.charts.length);
+        return true;
+      }
+    }
+  } catch(e) {}
+  return false;
+}
+
 
 /* === NEWSLETTER STORAGE === */
 function showNewsletterForType(type) {
@@ -1603,8 +1747,11 @@ async function generate() {
     newsletters[currentType]    = text;
     _lastRawMarkdown[currentType] = text; /* preserve for chart re-extraction after edits */
     autoSave(currentType, text, text); /* store text as both display and rawMarkdown */
+    /* New newsletter wipes all previous charts (auto + manual) */
     allCharts[currentType]      = extractCharts(text);
     selectedCharts[currentType] = allCharts[currentType].slice();
+    customCharts[currentType]   = []; /* deprecated but clear it */
+    saveUnifiedChartsToKV(currentType);
     populateChartBuilderMetrics(sd, opsData);
     populateMultiTabChartBuilder(); /* async - populates additional tabs */
     /* Pre-fill chart builder date pickers from the actual filtered range */
@@ -1707,7 +1854,7 @@ async function reRenderCharts() {
   }
 
   /* Build the full chart array: allCharts + customCharts */
-  var allForRender = (allCharts[currentType] || []).concat(customCharts[currentType] || []);
+  var allForRender = (allCharts[currentType] || []).slice();
 
   /* If no charts in memory, try to load from KV */
   if (!allForRender.length) {
@@ -1720,15 +1867,12 @@ async function reRenderCharts() {
           allCharts[currentType] = data.charts;
           selectedCharts[currentType] = data.charts.slice();
         }
-        if (data.customCharts && data.customCharts.length) {
-          customCharts[currentType] = data.customCharts;
-        }
-        allForRender = (allCharts[currentType] || []).concat(customCharts[currentType] || []);
+        allForRender = (allCharts[currentType] || []).slice();
       }
     } catch(e) {}
     /* Also try dedicated custom charts KV key */
     var ccResp = await loadCustomChartsFromKV(currentType);
-    allForRender = (allCharts[currentType] || []).concat(customCharts[currentType] || []);
+    allForRender = (allCharts[currentType] || []).slice();
   }
 
   if (!allForRender.length) {
@@ -2002,7 +2146,7 @@ async function shareNewsletter() {
         text:         content,
         charts:       allCharts[currentType] || [],
         customCharts: customCharts[currentType] || [],
-        inlineCharts: _pendingInlineCharts || (allCharts[currentType] || []).concat(customCharts[currentType] || []),
+        inlineCharts: (selectedCharts[currentType] && selectedCharts[currentType].length) ? selectedCharts[currentType] : (allCharts[currentType] || []),
         type:         currentType,
         title:        brand + ' Investor Newsletter — ' + monthLabel,
         name:         monthLabel,
@@ -2116,17 +2260,11 @@ async function shareNewsletter() {
         allCharts[type] = data.charts;
         selectedCharts[type] = data.charts.slice();
       }
-      if (data.customCharts && data.customCharts.length) {
-        customCharts[type] = data.customCharts;
-      }
-      /* Rebuild _pendingInlineCharts - prefer saved inlineCharts (exact match to saved HTML), fall back to combined arrays */
       var allForRender;
       if (data.inlineCharts && data.inlineCharts.length) {
         allForRender = data.inlineCharts;
-        console.log('[investor] using saved inlineCharts:', allForRender.length);
       } else {
-        allForRender = (allCharts[type] || []).concat(customCharts[type] || []);
-        console.log('[investor] using concat fallback:', allForRender.length);
+        allForRender = (allCharts[type] || []).slice();
       }
       _pendingInlineCharts = allForRender;
       /* Re-render canvases inside the newsletter HTML */
@@ -2174,87 +2312,68 @@ function removeInlineChart(btn) {
   if (!embed) return;
   var idx = parseInt(embed.getAttribute('data-chart-index') || '0', 10);
   embed.parentNode.removeChild(embed);
-  /* Remove from selectedCharts so it doesn't re-render */
+  /* Find the chart that was at this position and remove from selectedCharts ONLY */
+  /* (chart stays on Charts page) */
   if (_pendingInlineCharts && _pendingInlineCharts[idx]) {
     var chart = _pendingInlineCharts[idx];
     var sel = selectedCharts[currentType] || [];
     var selIdx = sel.indexOf(chart);
     if (selIdx >= 0) sel.splice(selIdx, 1);
-    /* Also remove from allCharts */
-    var ac = allCharts[currentType] || [];
-    var acIdx = ac.indexOf(chart);
-    if (acIdx >= 0) ac.splice(acIdx, 1);
+    selectedCharts[currentType] = sel;
   }
-  /* Save */
+  /* Save newsletter HTML and selected chart state */
   var body = document.getElementById('newsletterBody');
   if (body) { newsletters[currentType] = body.innerHTML; autoSave(currentType, body.innerHTML); }
-  showStatus('success', 'Chart removed from newsletter.');
+  saveUnifiedChartsToKV(currentType);
+  showStatus('success', 'Chart removed from newsletter (still available on Charts page).');
 }
+
 function removeGeneratedChart(idx) {
-  var charts = allCharts[currentType];
-  var selCharts = selectedCharts[currentType];
-  if (!charts || idx >= charts.length) return;
-  /* Remove from both allCharts and selectedCharts */
-  var removed = charts.splice(idx, 1)[0];
-  if (selCharts) {
-    var selIdx = selCharts.indexOf(removed);
-    if (selIdx >= 0) selCharts.splice(selIdx, 1);
-  }
-  /* Also remove inline chart from newsletter body if present */
-  var body = document.getElementById('newsletterBody');
-  if (body) {
-    var embeds = body.querySelectorAll('.chart-embed');
-    for (var i = 0; i < embeds.length; i++) {
-      var titleEl = embeds[i].querySelector('.chart-embed-title');
-      if (titleEl && removed && titleEl.textContent.trim() === (removed.title || '').trim()) {
-        embeds[i].parentNode.removeChild(embeds[i]);
-        break;
-      }
-    }
-  }
-  /* Save updated charts */
-  autoSave(currentType, newsletters[currentType] || '', _lastRawMarkdown[currentType]);
-  /* Re-render charts tab */
+  /* Charts page X button: delete from EVERYWHERE */
+  var all = allCharts[currentType] || [];
+  if (idx < 0 || idx >= all.length) return;
+  var chart = all[idx];
+  /* Remove from selectedCharts */
+  var sel = selectedCharts[currentType] || [];
+  var sIdx = sel.indexOf(chart);
+  if (sIdx >= 0) sel.splice(sIdx, 1);
+  /* Remove from allCharts */
+  all.splice(idx, 1);
+  allCharts[currentType] = all;
+  selectedCharts[currentType] = sel;
+  saveUnifiedChartsToKV(currentType);
+  /* Re-render newsletter (it might have this chart inline) and charts tab */
+  showNewsletterForType(currentType);
   renderChartsTab();
-  showStatus('success', 'Chart removed.');
+  if (document.getElementById('chartPickerPanel') && document.getElementById('chartPickerPanel').style.display !== 'none') refreshChartPicker();
+  showStatus('success', 'Chart deleted.');
 }
+
 function renderChartsTab() {
   var grid = document.getElementById('chartsGrid'), charts = allCharts[currentType] || [];
   /* Destroy tab chart instances */
   for (var ci in _chartRegistry) { if (ci.indexOf('chart-tab-') === 0) destroyChart(ci); }
   grid.innerHTML = '';
-  if (!charts.length) { grid.innerHTML = '<p style="color:var(--muted);padding:20px">No charts yet. Generate a newsletter first.</p>'; return; }
+  if (!charts.length) { grid.innerHTML = '<p style="color:var(--muted);padding:20px">No charts yet. Generate a newsletter or add a chart manually.</p>'; return; }
   var sel = selectedCharts[currentType] || [];
   for (var i = 0; i < charts.length; i++) {
     (function(chart, idx) {
-      var isSel = sel.indexOf(chart) >= 0;
-      var card  = document.createElement('div'); card.className = 'chart-card'; card.style.opacity = isSel ? '1' : '0.45';
+      var isInNL = sel.indexOf(chart) >= 0;
+      var card  = document.createElement('div'); card.className = 'chart-card'; card.style.opacity = isInNL ? '1' : '0.65';
+      var insertBtn = isInNL
+        ? '<span style="font-size:10px;color:var(--muted);padding:3px 8px;">In newsletter</span>'
+        : '<button onclick="insertChartAtSection(' + idx + ')" style="padding:3px 10px;background:var(--primary);color:white;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700;">Insert →</button>';
       card.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
         '<div class="chart-card-title" style="font-size:13px;">' + (chart.title || 'Chart ' + (idx+1)) + '</div>' +
-        '<button onclick="removeGeneratedChart(' + idx + ')" style="border:none;background:var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;padding:2px 7px;border-radius:4px;flex-shrink:0;" title="Remove chart">✕</button>' +
-        '</div>' +
+        '<div style="display:flex;gap:6px;align-items:center;">' +
+        insertBtn +
+        '<button onclick="removeGeneratedChart(' + idx + ')" style="border:none;background:var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;padding:2px 7px;border-radius:4px;flex-shrink:0;" title="Delete chart from everywhere">✕</button>' +
+        '</div></div>' +
         '<canvas id="chart-tab-' + idx + '" height="200"></canvas>';
       grid.appendChild(card);
       setTimeout(function() { var c = document.getElementById('chart-tab-' + idx); if (c) renderSingleChart(c, chart); }, 60);
     })(charts[i], i);
-  }
-  /* Append custom charts for this type after generated charts */
-  var customList = customCharts[currentType] || [];
-  for (var ci = 0; ci < customList.length; ci++) {
-    (function(chart, idx) {
-      var card = document.createElement('div');
-      card.className = 'chart-card'; card.setAttribute('data-custom-chart', idx);
-      card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-        '<div class="chart-card-title" style="font-size:13px;">' + chart.title + '</div>' +
-        '<div style="display:flex;gap:8px;align-items:center;">' +
-        '<button onclick="insertChartAtSection(' + idx + ')" style="padding:3px 10px;background:var(--primary);color:white;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700;">Insert →</button>' +
-        '<button onclick="removeCustomChart(' + idx + ')" style="border:none;background:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0;">&#10005;</button>' +
-        '</div></div>' +
-        '<canvas id="custom-tab-' + idx + '" height="200"></canvas>';
-      grid.appendChild(card);
-      setTimeout(function() { var c = document.getElementById('custom-tab-' + idx); if (c) renderSingleChart(c, chart); }, 60);
-    })(customList[ci], ci);
   }
 }
 /* Track all Chart.js instances by canvas ID so we can destroy before re-creating */
@@ -3215,10 +3334,13 @@ async function buildCustomChart() {
   console.log('[buildCustomChart] FINAL chartDef:', { type: chartDef.type, title: chartDef.title, seriesCount: chartDef.series.length, series: chartDef.series.map(function(s){ return { label: s.label, valsLen: s.values && s.values.length }; }) });
   if (isDual) chartDef.dualAxis = true;
 
-  if (!customCharts[currentType]) customCharts[currentType] = [];
-  customCharts[currentType].push(chartDef);
-  /* Save custom charts to dedicated KV key */
-  saveCustomChartsToKV(currentType);
+  /* Add chart to unified allCharts array */
+  if (!allCharts[currentType]) allCharts[currentType] = [];
+  allCharts[currentType].push(chartDef);
+  /* Don't auto-add to newsletter — let user pick placement via Insert button */
+  saveUnifiedChartsToKV(currentType);
+  renderChartsTab();
+  if (document.getElementById('chartPickerPanel') && document.getElementById('chartPickerPanel').style.display !== 'none') refreshChartPicker();
 
   /* Re-render entire charts tab so new chart appears in correct grid position */
   var chartsTab = document.getElementById('chartsTab');
@@ -3362,57 +3484,118 @@ function buildChartWrapper(chart) {
   return wrapper;
 }
 
-function insertChartAtSection(idx) {
-  var chart = (customCharts[currentType] || [])[idx];
-  if (!chart) return;
+function insertChartAtSection(chartIdx) {
+  /* Open a popup showing newsletter H2 headers - user picks where to insert */
+  var chart = (allCharts[currentType] || [])[chartIdx];
+  if (!chart) { showStatus('error', 'Chart not found.'); return; }
   var body = document.getElementById('newsletterBody');
-  if (!body) { showStatus('error', 'Generate a newsletter first.'); return; }
-
-  var sel = document.getElementById('chart-section-' + idx);
-  var anchorId = sel ? sel.value : '__end__';
-
-  var wrapper = buildChartWrapper(chart);
-
-  if (anchorId === '__start__') {
-    body.insertBefore(wrapper, body.firstChild);
-  } else if (anchorId === '__end__') {
-    body.appendChild(wrapper);
-  } else {
-    var anchor = document.getElementById(anchorId);
-    if (anchor) {
-      /* Insert after the section heading and its immediately following paragraph */
-      var insertAfter = anchor;
-      var next = anchor.nextSibling;
-      /* Skip one paragraph after the heading if present */
-      if (next && next.nodeName === 'P') insertAfter = next;
-      if (insertAfter.nextSibling) {
-        body.insertBefore(wrapper, insertAfter.nextSibling);
-      } else {
-        body.appendChild(wrapper);
-      }
-    } else {
-      body.appendChild(wrapper);
+  if (!body) { showStatus('error', 'No newsletter loaded.'); return; }
+  var h2s = body.querySelectorAll('h2');
+  if (!h2s.length) {
+    /* No H2 sections - just append to end */
+    if (confirm('No section headers found. Insert chart at end of newsletter?')) {
+      appendChartToNewsletter(chartIdx);
     }
+    return;
   }
 
-  setTimeout(function() {
-    var c = document.getElementById(wrapper._canvasId);
-    if (c) renderSingleChart(c, chart);
-    setupChartDrag(wrapper);
-  }, 60);
-
-  /* Switch to newsletter tab to show result */
-  switchTab('newsletter', document.querySelector('.tab'));
-
-  /* Auto-save the insertion */
-  newsletters[currentType] = body.innerHTML;
-  autoSave(currentType, body.innerHTML, _lastRawMarkdown[currentType]);
-
-  showStatus('success', 'Chart inserted. Enter Edit mode to drag it to a different position.');
+  /* Build modal */
+  var modal = document.getElementById('chartInsertModal');
+  if (modal) modal.parentNode.removeChild(modal);
+  modal = document.createElement('div');
+  modal.id = 'chartInsertModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  var inner = '<div style="background:var(--surface);border-radius:12px;padding:24px;max-width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
+    '<div style="font-size:16px;font-weight:700;margin-bottom:6px;">Insert chart after which section?</div>' +
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:16px;">' + (chart.title || 'Chart') + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:16px;">';
+  for (var hi = 0; hi < h2s.length; hi++) {
+    var headerText = h2s[hi].textContent.trim();
+    inner += '<button onclick="insertChartAfterH2(' + chartIdx + ',' + hi + ')" style="text-align:left;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;color:var(--text);">' + (hi+1) + '. ' + headerText + '</button>';
+  }
+  inner += '</div>' +
+    '<div style="display:flex;justify-content:space-between;gap:8px;">' +
+    '<button onclick="appendChartToNewsletter(' + chartIdx + ')" style="padding:8px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;color:var(--text);">Append at end</button>' +
+    '<button onclick="document.getElementById(\'chartInsertModal\').remove()" style="padding:8px 14px;background:var(--border);border:none;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text);">Cancel</button>' +
+    '</div></div>';
+  modal.innerHTML = inner;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
 }
 
-/* === TOGGLE PANELS === */
+function insertChartAfterH2(chartIdx, h2Idx) {
+  var modal = document.getElementById('chartInsertModal'); if (modal) modal.remove();
+  var chart = (allCharts[currentType] || [])[chartIdx];
+  if (!chart) return;
+  var body = document.getElementById('newsletterBody');
+  var h2 = body.querySelectorAll('h2')[h2Idx];
+  if (!h2) { showStatus('error', 'Section not found.'); return; }
 
+  /* Build chart embed HTML */
+  var embedHTML = buildChartEmbedHTML(chart, allCharts[currentType].indexOf(chart));
+  var tmpDiv = document.createElement('div');
+  tmpDiv.innerHTML = embedHTML;
+  var embedEl = tmpDiv.firstElementChild;
+
+  /* Insert immediately after the H2 element */
+  h2.parentNode.insertBefore(embedEl, h2.nextSibling);
+
+  /* Update selectedCharts to include this chart */
+  if (!selectedCharts[currentType]) selectedCharts[currentType] = [];
+  if (selectedCharts[currentType].indexOf(chart) < 0) selectedCharts[currentType].push(chart);
+
+  /* Save and re-render the embed's canvas */
+  newsletters[currentType] = body.innerHTML;
+  autoSave(currentType, body.innerHTML);
+  saveUnifiedChartsToKV(currentType);
+
+  setTimeout(function() {
+    var canvas = embedEl.querySelector('canvas');
+    if (canvas) renderSingleChart(canvas, chart);
+  }, 100);
+
+  renderChartsTab();
+  showStatus('success', 'Chart inserted after "' + h2.textContent.trim() + '".');
+}
+
+function appendChartToNewsletter(chartIdx) {
+  var modal = document.getElementById('chartInsertModal'); if (modal) modal.remove();
+  var chart = (allCharts[currentType] || [])[chartIdx];
+  if (!chart) return;
+  var body = document.getElementById('newsletterBody');
+  var embedHTML = buildChartEmbedHTML(chart, allCharts[currentType].indexOf(chart));
+  var tmpDiv = document.createElement('div');
+  tmpDiv.innerHTML = embedHTML;
+  body.appendChild(tmpDiv.firstElementChild);
+
+  if (!selectedCharts[currentType]) selectedCharts[currentType] = [];
+  if (selectedCharts[currentType].indexOf(chart) < 0) selectedCharts[currentType].push(chart);
+
+  newsletters[currentType] = body.innerHTML;
+  autoSave(currentType, body.innerHTML);
+  saveUnifiedChartsToKV(currentType);
+
+  setTimeout(function() {
+    var canvases = body.querySelectorAll('.chart-embed canvas');
+    var last = canvases[canvases.length - 1];
+    if (last) renderSingleChart(last, chart);
+  }, 100);
+
+  renderChartsTab();
+  showStatus('success', 'Chart added to end of newsletter.');
+}
+
+function buildChartEmbedHTML(chart, chartIdx) {
+  return '<div class="chart-embed" data-chart-index="' + chartIdx + '" draggable="true" contenteditable="false">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+    '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<span class="chart-drag-handle" style="color:var(--muted);font-size:12px;cursor:grab;user-select:none;" title="Drag to reposition">↕ drag</span>' +
+    '<div class="chart-embed-title">' + (chart.title || 'Chart') + '</div>' +
+    '</div>' +
+    '<button onclick="removeInlineChart(this)" style="border:none;background:var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;padding:2px 7px;border-radius:4px;" title="Remove from newsletter">✕</button>' +
+    '</div>' +
+    '<canvas id="chart-inline-' + Date.now() + '-' + chartIdx + '" height="180"></canvas></div>';
+}
 
 function removeBlankCharts() {
   var all = allCharts[currentType] || [];
@@ -3432,26 +3615,78 @@ function refreshChartPicker() {
   var listEl = document.getElementById('chartPickerList');
   if (!listEl) return;
   var all = allCharts[currentType] || [];
-  var custom = customCharts[currentType] || [];
   var sel = selectedCharts[currentType] || [];
-  var allCombined = all.concat(custom);
-  if (!allCombined.length) {
-    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0;">No charts yet. Generate a newsletter to create charts.</div>';
+
+  if (!all.length) {
+    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0 4px;">No charts yet. Generate a newsletter or add a chart manually.</div>';
     return;
   }
-  var html = '<div style="font-size:10px;color:var(--muted);margin-bottom:8px;">Click to add/remove from newsletter</div>';
-  for (var i = 0; i < allCombined.length; i++) {
-    var chart = allCombined[i];
-    var isSelected = sel.indexOf(chart) >= 0;
-    var isCustom = i >= all.length;
-    var label = isCustom ? '[Custom] ' : '';
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="toggleChartInNewsletter(' + i + ')">' +
-      '<div style="width:16px;height:16px;border-radius:3px;border:2px solid var(--primary);background:' + (isSelected ? 'var(--primary)' : 'transparent') + ';flex-shrink:0;display:flex;align-items:center;justify-content:center;">' +
-      (isSelected ? '<span style="color:white;font-size:10px;font-weight:700;">✓</span>' : '') + '</div>' +
-      '<div style="font-size:11px;line-height:1.3;">' + label + (chart.title || 'Chart ' + (i+1)) + '</div>' +
-      '</div>';
+
+  var bP = 'padding:2px 7px;border:1px solid var(--primary);border-radius:4px;background:transparent;color:var(--primary);font-size:10px;cursor:pointer;';
+  var bM = 'padding:2px 7px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);font-size:10px;cursor:pointer;';
+
+  var _bl = all.filter(function(c){return !c.series||!c.series[0]||!c.series[0].values||!c.series[0].values.length;}).length;
+  var html = '<div style="font-size:10px;color:var(--muted);margin-bottom:10px;">Toggle charts in newsletter. Click \u2715 to delete from all places.</div>';
+  if (_bl > 0) html += '<div style="margin-bottom:8px;"><button onclick="removeBlankCharts()" style="padding:4px 10px;background:#c0392b;color:white;border:none;border-radius:4px;font-size:11px;cursor:pointer;">Remove ' + _bl + ' blank chart' + (_bl>1?'s':'') + '</button></div>';
+
+  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);margin:8px 0 4px;">All Charts</div>';
+  for (var i = 0; i < all.length; i++) {
+    var chart = all[i];
+    var isInNL = sel.indexOf(chart) >= 0;
+    var name = chart.title || ('Chart ' + (i+1));
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);">' +
+      '<div style="flex:1;min-width:0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + name.replace(/"/g,'&quot;') + '">' + name + '</div>' +
+      '<div style="display:flex;gap:3px;flex-shrink:0;">' +
+      '<button onclick="toggleChartInNewsletter(' + i + ')" style="' + (isInNL ? bP : bM) + '">' + (isInNL ? 'In NL \u2713' : '+ Add') + '</button>' +
+      '<button onclick="deleteChartCompletely(' + i + ')" style="' + bM + '" title="Delete chart from everywhere">\u2715</button>' +
+      '</div></div>';
   }
   listEl.innerHTML = html;
+}
+
+function toggleChartInNewsletter(idx) {
+  var all = allCharts[currentType] || [];
+  var chart = all[idx];
+  if (!chart) return;
+  var sel = selectedCharts[currentType] || [];
+  var selIdx = sel.indexOf(chart);
+  if (selIdx >= 0) { sel.splice(selIdx, 1); }
+  else { sel.push(chart); }
+  selectedCharts[currentType] = sel;
+  saveUnifiedChartsToKV(currentType);
+  showNewsletterForType(currentType);
+  refreshChartPicker();
+}
+
+function deleteChartCompletely(idx) {
+  var all = allCharts[currentType] || [];
+  var chart = all[idx];
+  if (!chart) return;
+  /* Remove from selectedCharts */
+  var sel = selectedCharts[currentType] || [];
+  var sIdx = sel.indexOf(chart);
+  if (sIdx >= 0) sel.splice(sIdx, 1);
+  /* Remove from allCharts */
+  all.splice(idx, 1);
+  allCharts[currentType] = all;
+  selectedCharts[currentType] = sel;
+  saveUnifiedChartsToKV(currentType);
+  showNewsletterForType(currentType);
+  renderChartsTab();
+  refreshChartPicker();
+  showStatus('success', 'Chart deleted.');
+}
+
+function removeBlankCharts() {
+  var all = allCharts[currentType] || [];
+  var blanks = all.filter(function(c) { return !c.series || !c.series[0] || !c.series[0].values || !c.series[0].values.length; });
+  allCharts[currentType] = all.filter(function(c) { return c.series && c.series[0] && c.series[0].values && c.series[0].values.length; });
+  selectedCharts[currentType] = (selectedCharts[currentType] || []).filter(function(c) { return allCharts[currentType].indexOf(c) >= 0; });
+  saveUnifiedChartsToKV(currentType);
+  showNewsletterForType(currentType);
+  renderChartsTab();
+  refreshChartPicker();
+  showStatus('success', blanks.length + ' blank chart' + (blanks.length>1?'s':'') + ' removed.');
 }
 
 function toggleChartInNewsletter(idx) {
