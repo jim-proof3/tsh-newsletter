@@ -3319,23 +3319,42 @@ function renderSavesList() {
 }
 
 function deleteSaveOptimistic(id, type) {
-  if (!confirm('Delete this save?')) return;
+  if (!confirm('Delete this save?\n\nID: ' + id)) return;
+  console.log('[delete] attempting DELETE for ID:', id);
+  console.log('[delete] encoded URL:', WORKER_URL + '/newsletter?id=' + encodeURIComponent(id));
   /* Remove from UI immediately */
   var rowId = 'save-row-' + id.replace(/[^a-zA-Z0-9]/g,'_');
   var row = document.getElementById(rowId);
   if (row) row.style.display = 'none';
   /* Remove from cache */
   if (_historyCache) _historyCache = _historyCache.filter(function(s) { return s.id !== id; });
-  /* Delete from KV — await + verify */
+  /* Delete from KV — await + verify, AND verify the item is actually gone afterward */
   fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id), { method: 'DELETE' })
     .then(function(r) {
       if (!r.ok) {
         console.error('[delete] failed for', id, 'status', r.status);
         showStatus('error', 'Delete failed for ' + id + ' (status ' + r.status + ')');
         if (row) row.style.display = ''; /* unhide */
-        _historyCache = null; /* force refetch */
-      } else {
-        console.log('[delete] success:', id);
+        _historyCache = null;
+        return null;
+      }
+      return r.json();
+    })
+    .then(function(data) {
+      if (data) {
+        console.log('[delete] worker response:', data);
+        /* Verify deletion: try to GET the key — should 404 */
+        return fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id))
+          .then(function(verify) {
+            if (verify.status === 404) {
+              console.log('[delete] VERIFIED gone:', id);
+            } else {
+              console.warn('[delete] WARNING: key still exists after delete! status:', verify.status, 'id:', id);
+              showStatus('error', 'Delete reported success but key still in KV: ' + id);
+              if (row) row.style.display = '';
+              _historyCache = null;
+            }
+          });
       }
     })
     .catch(function(e) {
@@ -3344,7 +3363,6 @@ function deleteSaveOptimistic(id, type) {
       if (row) row.style.display = '';
       _historyCache = null;
     });
-  /* Always invalidate cache so next panel open re-fetches truth */
   _historyCache = null;
   showStatus('success', 'Deleting ' + id + '...');
 }
@@ -3354,14 +3372,32 @@ function loadSave(type, isLocal) {
   var saved = isLocal ? loadAutoSave(type) : null;
   if (!saved || !saved.text) { showStatus('error', 'Save not found.'); return; }
   newsletters[type] = saved.text;
-  allCharts[type] = extractCharts(saved.text);
+  /* Use saved.charts if available (modern saves), else fall back to extract */
+  if (saved.charts && saved.charts.length) {
+    allCharts[type] = saved.charts;
+  } else {
+    allCharts[type] = extractCharts(saved.text);
+  }
   selectedCharts[type] = allCharts[type].slice();
+  _pendingInlineCharts = allCharts[type].slice();
+  console.log('[loadSave] loaded', allCharts[type].length, 'charts for', type);
+
+  try { saveUnifiedChartsToKV(type); } catch(e) {}
+
   /* Switch to that type */
   var cards = document.querySelectorAll('[data-type="' + type + '"]');
   if (cards.length > 0) setType(type, cards[0]);
   else showNewsletterForType(type);
+
+  /* Force render after DOM settles */
+  setTimeout(function() {
+    try { renderNewsletterCharts(); } catch(e) {}
+    try { renderChartsTab(); } catch(e) {}
+    try { refreshChartPicker(); } catch(e) {}
+  }, 200);
+
   document.getElementById('historyPanel').style.display = 'none';
-  showStatus('success', 'Newsletter loaded.');
+  showStatus('success', 'Newsletter loaded with ' + allCharts[type].length + ' chart(s).');
 }
 
 function deleteSave(type, isLocal) {
@@ -3446,19 +3482,51 @@ async function loadCloudSave(id, type) {
     if (data.error) throw new Error(data.error);
     var t = type || data.type || currentType;
     newsletters[t] = data.text || '';
+
+    /* Prefer explicit charts; fall back to any inlineCharts; else extract from text */
+    var loadedCharts = [];
     if (data.charts && data.charts.length) {
-      allCharts[t] = data.charts;
+      loadedCharts = data.charts;
+    } else if (data.inlineCharts && data.inlineCharts.length) {
+      loadedCharts = data.inlineCharts;
+    } else if (data.customCharts && data.customCharts.length) {
+      loadedCharts = data.customCharts;
     } else {
-      allCharts[t] = extractCharts(data.text || '');
+      loadedCharts = extractCharts(data.text || '');
     }
-    selectedCharts[t] = allCharts[t].slice();
+    console.log('[loadCloudSave] loaded', loadedCharts.length, 'charts for', t);
+
+    allCharts[t] = loadedCharts;
+    /* inlineCharts (from share-time) take precedence for selectedCharts */
+    if (data.inlineCharts && data.inlineCharts.length) {
+      selectedCharts[t] = data.inlineCharts.slice();
+      _pendingInlineCharts = data.inlineCharts.slice();
+    } else {
+      selectedCharts[t] = loadedCharts.slice();
+      _pendingInlineCharts = loadedCharts.slice();
+    }
+
+    /* PERSIST to KV and localStorage so hard refresh restores correctly */
     autoSave(t, data.text || '');
+    try { saveUnifiedChartsToKV(t); } catch(e) { console.error('[loadCloudSave] saveUnifiedChartsToKV failed:', e); }
+
+    /* Switch type then explicitly render */
     var cards = document.querySelectorAll('[data-type="' + t + '"]');
     if (cards.length > 0) setType(t, cards[0]);
     else showNewsletterForType(t);
+
+    /* Force chart rendering after DOM settles - title matching will pick up charts */
+    setTimeout(function() {
+      try { renderNewsletterCharts(); } catch(e) { console.error('[loadCloudSave] renderNewsletterCharts failed:', e); }
+      try { renderChartsTab(); } catch(e) { console.error('[loadCloudSave] renderChartsTab failed:', e); }
+      try { refreshChartPicker(); } catch(e) {}
+      try { ensureChartEmbedXButtons(); } catch(e) {}
+    }, 200);
+
     document.getElementById('historyPanel').style.display = 'none';
-    showStatus('success', 'Newsletter loaded from cloud.');
+    showStatus('success', 'Loaded ' + loadedCharts.length + ' chart(s) from cloud.');
   } catch(err) {
+    console.error('[loadCloudSave] error:', err);
     showStatus('error', 'Load failed: ' + err.message + '. Link may have expired (90 day limit).');
   }
 }
