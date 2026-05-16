@@ -896,10 +896,15 @@ function setFavicon(brand) {
  * 
  * This guarantees: type change → localStorage + favicon + title stay in sync.
  * ════════════════════════════════════════════════════════════════════════ */
-function setCurrentType(type) {
+function setCurrentType(type, opts) {
   if (type !== 'all' && type !== 'p3spv') return; /* validate */
+  opts = opts || {};
   currentType = type;
-  try { localStorage.setItem('sh_current_type', type); } catch(e) {}
+  /* Only persist to localStorage from the GENERATOR — investor view should
+     not pollute the user's generator state by writing the share link's type */
+  if (opts.persist !== false) {
+    try { localStorage.setItem('sh_current_type', type); } catch(e) {}
+  }
   var cfg = SHEET_CONFIGS[type] || {};
   setFavicon(cfg.brand || 'sagehouse');
   setTitle(type);
@@ -1118,8 +1123,12 @@ function setType(type, cardEl) {
   renderContextFields(currentType);
   restoreContextFields();
   setupContextFieldPersistence();
-  /* Apply UI state for currentType (already read from localStorage at declaration) */
-  setCurrentType(currentType);
+  /* Apply UI state for currentType (already read from localStorage at declaration).
+     But if we're in investor view (?view=...), let checkViewMode set type from URL.
+     This avoids overriding the head-script favicon with stale localStorage value. */
+  if (!new URLSearchParams(window.location.search).get('view')) {
+    setCurrentType(currentType);
+  }
   /* Load unified charts model, falling back to migration from old custom charts */
   (async function() {
     try {
@@ -2464,8 +2473,9 @@ async function shareNewsletter() {
   if (editTb) editTb.style.display = 'none';
   var type = params.get('type') || 'all';
   var cfg  = SHEET_CONFIGS[type] || { label:'Newsletter', brand:'sagehouse' };
-  /* Use single source of truth — sets currentType, favicon, title, data-brand */
-  setCurrentType(type);
+  /* Use single source of truth — sets currentType, favicon, title, data-brand.
+     Pass persist:false so visiting a share link doesn't pollute generator localStorage. */
+  setCurrentType(type, { persist: false });
   var spacer = document.querySelector('.top-bar-spacer');
   var investorTitleEl = null;
   if (spacer) {
