@@ -3061,13 +3061,22 @@ function autoSave(type, text) {
   };
   /* localStorage */
   try { localStorage.setItem(AUTOSAVE_KEY_PREFIX + type, JSON.stringify(payload)); } catch(e) {}
-  /* KV */
+  /* KV — but suppress if user recently deleted this autosave key */
+  var autosaveKey = AUTOSAVE_KV_ID[type];
+  if (_recentlyDeleted && _recentlyDeleted[autosaveKey] && _recentlyDeleted[autosaveKey] > Date.now()) {
+    console.log('[autoSave] suppressed — key recently deleted:', autosaveKey);
+    return;
+  }
+  /* Clean up expired suppression entries */
+  if (_recentlyDeleted && _recentlyDeleted[autosaveKey] && _recentlyDeleted[autosaveKey] <= Date.now()) {
+    delete _recentlyDeleted[autosaveKey];
+  }
   try {
     fetch(WORKER_URL + '/newsletter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id:           AUTOSAVE_KV_ID[type],
+        id:           autosaveKey,
         text:         text,
         charts:       chartsToStore,
         customCharts: customCharts[type] || [],
@@ -3318,24 +3327,34 @@ function renderSavesList() {
   listEl.innerHTML = html;
 }
 
+/* Track IDs the user just deleted, so autoSave can suppress re-creation briefly */
+var _recentlyDeleted = {};
 function deleteSaveOptimistic(id, type) {
   if (!confirm('Delete this save?\n\nID: ' + id)) return;
   console.log('[delete] attempting DELETE for ID:', id);
-  console.log('[delete] encoded URL:', WORKER_URL + '/newsletter?id=' + encodeURIComponent(id));
+
+  /* Suppress autoSave recreating this key for 30 seconds */
+  _recentlyDeleted[id] = Date.now() + 30000;
+
   /* Remove from UI immediately */
   var rowId = 'save-row-' + id.replace(/[^a-zA-Z0-9]/g,'_');
   var row = document.getElementById(rowId);
   if (row) row.style.display = 'none';
-  /* Remove from cache */
-  if (_historyCache) _historyCache = _historyCache.filter(function(s) { return s.id !== id; });
-  /* Delete from KV — await + verify, AND verify the item is actually gone afterward */
+
+  /* Remove from cache WITHOUT nulling it — preserve other items so tab switches don't refetch */
+  if (_historyCache) {
+    _historyCache = _historyCache.filter(function(s) { return s.id !== id; });
+  }
+
+  /* Delete from KV — await + verify */
   fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id), { method: 'DELETE' })
     .then(function(r) {
+      console.log('[delete] DELETE response status:', r.status, 'for id:', id);
       if (!r.ok) {
         console.error('[delete] failed for', id, 'status', r.status);
         showStatus('error', 'Delete failed for ' + id + ' (status ' + r.status + ')');
-        if (row) row.style.display = ''; /* unhide */
-        _historyCache = null;
+        if (row) row.style.display = '';
+        delete _recentlyDeleted[id];
         return null;
       }
       return r.json();
@@ -3343,16 +3362,16 @@ function deleteSaveOptimistic(id, type) {
     .then(function(data) {
       if (data) {
         console.log('[delete] worker response:', data);
-        /* Verify deletion: try to GET the key — should 404 */
+        /* Verify deletion: GET the key — should 404 */
         return fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id))
           .then(function(verify) {
             if (verify.status === 404) {
               console.log('[delete] VERIFIED gone:', id);
+              showStatus('success', 'Deleted: ' + (id.length > 40 ? id.substring(0, 40) + '...' : id));
             } else {
               console.warn('[delete] WARNING: key still exists after delete! status:', verify.status, 'id:', id);
-              showStatus('error', 'Delete reported success but key still in KV: ' + id);
+              showStatus('error', 'Server reported success but key still exists: ' + id);
               if (row) row.style.display = '';
-              _historyCache = null;
             }
           });
       }
@@ -3361,10 +3380,8 @@ function deleteSaveOptimistic(id, type) {
       console.error('[delete] network error for', id, e);
       showStatus('error', 'Delete network error: ' + (e.message || 'unknown'));
       if (row) row.style.display = '';
-      _historyCache = null;
+      delete _recentlyDeleted[id];
     });
-  _historyCache = null;
-  showStatus('success', 'Deleting ' + id + '...');
 }
 async function deleteNamedSave(id, type) { deleteSaveOptimistic(id, type); }
 
