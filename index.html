@@ -2423,14 +2423,16 @@ async function shareNewsletter() {
     var content = body ? body.innerHTML : text;
     var brand = cfg.brand === 'proof3' ? 'proof3' : 'The SageHouse';
 
-    /* Build deterministic KV key: monthly-TYPE-month-year (lowercase, no spaces) */
+    /* Build human-readable base slug: monthly-TYPE-month-year (lowercase, no spaces).
+       Worker will append a random 8-char unguessable token to this base before storing. */
     var slug = monthLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    var kvId = 'monthly-' + currentType + '-' + slug;
+    var kvIdBase = 'monthly-' + currentType + '-' + slug;
 
     var resp = await fetch(WORKER_URL + '/newsletter', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id:           kvId,
+        id:           kvIdBase,
+        appendToken:  true,  /* tell the worker to add a random suffix for unguessability */
         text:         content,
         charts:       allCharts[currentType] || [],
         customCharts: customCharts[currentType] || [],
@@ -2446,6 +2448,8 @@ async function shareNewsletter() {
     var result = await resp.json();
     if (result.error) throw new Error(result.error);
 
+    /* Use the ID returned by the worker — includes the random token suffix */
+    var kvId = result.id || kvIdBase;
     var shareUrl = WORKER_URL + '/view/' + kvId + '?type=' + currentType;
 
     /* Update OG meta */
