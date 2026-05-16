@@ -558,7 +558,7 @@
         }
         #newsletterBody h1 + p + p em { font-style: italic; }
         </style>
-  <link rel="icon" id="pageFavicon" type="image/png" href="https://jim-proof3.github.io/tsh-newsletter/sh-logo.png">
+  <!-- favicon injected by head script below — no static href to avoid browser caching wrong icon -->
   <script>
   /* Set OG meta and title based on URL params - must run synchronously in <head> for crawlers */
   (function() {
@@ -582,9 +582,18 @@
     if (ogTitle) ogTitle.setAttribute('content', title);
     if (ogDesc)  ogDesc.setAttribute('content', 'Monthly investor update from ' + brand + '.');
     if (ogImg)   ogImg.setAttribute('content', 'https://jim-proof3.github.io/tsh-newsletter/' + (isP3 ? 'p3-logo.png' : 'sh-logo.png'));
-    /* Set favicon based on type BEFORE main JS runs - so it's correct from first paint */
-    var favLink = document.getElementById('pageFavicon');
-    if (favLink) favLink.setAttribute('href', 'https://jim-proof3.github.io/tsh-newsletter/' + (isP3 ? 'p3-logo.png' : 'sh-logo.png'));
+    /* Inject a fresh favicon link element. Removing and re-adding forces the browser
+       to fetch the new image rather than using a cached/initial favicon. */
+    (function injectFavicon() {
+      var existing = document.getElementById('pageFavicon');
+      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+      var link = document.createElement('link');
+      link.rel = 'icon';
+      link.id = 'pageFavicon';
+      link.type = 'image/png';
+      link.href = 'https://jim-proof3.github.io/tsh-newsletter/' + (isP3 ? 'p3-logo.png' : 'sh-logo.png');
+      document.head.appendChild(link);
+    })();
   })();
 
   /* Set favicon for non-investor (generator) pages by reading saved currentType */
@@ -594,8 +603,15 @@
     var savedType = null;
     try { savedType = localStorage.getItem('sh_current_type'); } catch(e) {}
     var isP3 = savedType === 'p3spv';
-    var favLink = document.getElementById('pageFavicon');
-    if (favLink) favLink.setAttribute('href', 'https://jim-proof3.github.io/tsh-newsletter/' + (isP3 ? 'p3-logo.png' : 'sh-logo.png'));
+    /* Inject fresh favicon link (see explanation in investor branch) */
+    var existing = document.getElementById('pageFavicon');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+    var link = document.createElement('link');
+    link.rel = 'icon';
+    link.id = 'pageFavicon';
+    link.type = 'image/png';
+    link.href = 'https://jim-proof3.github.io/tsh-newsletter/' + (isP3 ? 'p3-logo.png' : 'sh-logo.png');
+    document.head.appendChild(link);
   })();
   </script>
 </head>
@@ -883,8 +899,17 @@ function setTitle(type) {
   document.title = type === 'p3spv' ? 'NL-p3' : 'NL-All';
 }
 function setFavicon(brand) {
-  var el = document.getElementById('pageFavicon');
-  if (el) el.setAttribute('href', brand === 'proof3' ? FAVICON_P3 : FAVICON_SH);
+  /* Remove and re-inject the favicon link element. Browsers (especially Chrome)
+     don't reliably re-fetch favicon when only href is changed via setAttribute.
+     Replacing the node forces a fresh fetch. */
+  var existing = document.getElementById('pageFavicon');
+  if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+  var link = document.createElement('link');
+  link.rel = 'icon';
+  link.id = 'pageFavicon';
+  link.type = 'image/png';
+  link.href = brand === 'proof3' ? FAVICON_P3 : FAVICON_SH;
+  document.head.appendChild(link);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
