@@ -3327,58 +3327,42 @@ function renderSavesList() {
   listEl.innerHTML = html;
 }
 
-/* Track IDs the user just deleted, so autoSave can suppress re-creation briefly */
+/* Track IDs the user just deleted — autoSave checks this to avoid recreating */
 var _recentlyDeleted = {};
 function deleteSaveOptimistic(id, type) {
   if (!confirm('Delete this save?\n\nID: ' + id)) return;
-  console.log('[delete] attempting DELETE for ID:', id);
+  console.log('[delete] DELETE for ID:', id);
 
-  /* Suppress autoSave recreating this key for 30 seconds */
-  _recentlyDeleted[id] = Date.now() + 30000;
+  /* Suppress autoSave recreating this key for 120s (matches worker tombstone TTL) */
+  _recentlyDeleted[id] = Date.now() + 120000;
 
   /* Remove from UI immediately */
   var rowId = 'save-row-' + id.replace(/[^a-zA-Z0-9]/g,'_');
   var row = document.getElementById(rowId);
   if (row) row.style.display = 'none';
 
-  /* Remove from cache WITHOUT nulling it — preserve other items so tab switches don't refetch */
+  /* Remove from cache (keep cache populated so tab switches use it) */
   if (_historyCache) {
     _historyCache = _historyCache.filter(function(s) { return s.id !== id; });
   }
 
-  /* Delete from KV — await + verify */
+  /* Fire DELETE — worker now writes a tombstone that filters this from list/get
+     for 120 seconds, well past KV's eventual-consistency window. */
   fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id), { method: 'DELETE' })
     .then(function(r) {
-      console.log('[delete] DELETE response status:', r.status, 'for id:', id);
+      console.log('[delete] response status:', r.status, 'for id:', id);
       if (!r.ok) {
         console.error('[delete] failed for', id, 'status', r.status);
-        showStatus('error', 'Delete failed for ' + id + ' (status ' + r.status + ')');
+        showStatus('error', 'Delete failed (status ' + r.status + ')');
         if (row) row.style.display = '';
         delete _recentlyDeleted[id];
-        return null;
-      }
-      return r.json();
-    })
-    .then(function(data) {
-      if (data) {
-        console.log('[delete] worker response:', data);
-        /* Verify deletion: GET the key — should 404 */
-        return fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id))
-          .then(function(verify) {
-            if (verify.status === 404) {
-              console.log('[delete] VERIFIED gone:', id);
-              showStatus('success', 'Deleted: ' + (id.length > 40 ? id.substring(0, 40) + '...' : id));
-            } else {
-              console.warn('[delete] WARNING: key still exists after delete! status:', verify.status, 'id:', id);
-              showStatus('error', 'Server reported success but key still exists: ' + id);
-              if (row) row.style.display = '';
-            }
-          });
+      } else {
+        showStatus('success', 'Deleted.');
       }
     })
     .catch(function(e) {
-      console.error('[delete] network error for', id, e);
-      showStatus('error', 'Delete network error: ' + (e.message || 'unknown'));
+      console.error('[delete] network error:', e);
+      showStatus('error', 'Delete network error');
       if (row) row.style.display = '';
       delete _recentlyDeleted[id];
     });
