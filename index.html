@@ -816,8 +816,7 @@
               </select>
               <select id="chartBuilderStartYear" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:7px 6px;font-size:12px;color:var(--text);background:var(--bg);">
                 <option value="">Yr</option>
-                <option>2018</option><option>2019</option><option>2020</option><option>2021</option>
-                <option>2022</option><option>2023</option><option>2024</option><option>2025</option><option>2026</option>
+                <option>1945</option><option>1946</option><option>1947</option><option>1948</option><option>1949</option><option>1950</option><option>1951</option><option>1952</option><option>1953</option><option>1954</option><option>1955</option><option>1956</option><option>1957</option><option>1958</option><option>1959</option><option>1960</option><option>1961</option><option>1962</option><option>1963</option><option>1964</option><option>1965</option><option>1966</option><option>1967</option><option>1968</option><option>1969</option><option>1970</option><option>1971</option><option>1972</option><option>1973</option><option>1974</option><option>1975</option><option>1976</option><option>1977</option><option>1978</option><option>1979</option><option>1980</option><option>1981</option><option>1982</option><option>1983</option><option>1984</option><option>1985</option><option>1986</option><option>1987</option><option>1988</option><option>1989</option><option>1990</option><option>1991</option><option>1992</option><option>1993</option><option>1994</option><option>1995</option><option>1996</option><option>1997</option><option>1998</option><option>1999</option><option>2000</option><option>2001</option><option>2002</option><option>2003</option><option>2004</option><option>2005</option><option>2006</option><option>2007</option><option>2008</option><option>2009</option><option>2010</option><option>2011</option><option>2012</option><option>2013</option><option>2014</option><option>2015</option><option>2016</option><option>2017</option><option>2018</option><option>2019</option><option>2020</option><option>2021</option><option>2022</option><option>2023</option><option>2024</option><option>2025</option><option>2026</option>
               </select>
             </div>
           </div>
@@ -833,8 +832,7 @@
               </select>
               <select id="chartBuilderEndYear" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:7px 6px;font-size:12px;color:var(--text);background:var(--bg);">
                 <option value="">Yr</option>
-                <option>2018</option><option>2019</option><option>2020</option><option>2021</option>
-                <option>2022</option><option>2023</option><option>2024</option><option>2025</option><option>2026</option>
+                <option>1945</option><option>1946</option><option>1947</option><option>1948</option><option>1949</option><option>1950</option><option>1951</option><option>1952</option><option>1953</option><option>1954</option><option>1955</option><option>1956</option><option>1957</option><option>1958</option><option>1959</option><option>1960</option><option>1961</option><option>1962</option><option>1963</option><option>1964</option><option>1965</option><option>1966</option><option>1967</option><option>1968</option><option>1969</option><option>1970</option><option>1971</option><option>1972</option><option>1973</option><option>1974</option><option>1975</option><option>1976</option><option>1977</option><option>1978</option><option>1979</option><option>1980</option><option>1981</option><option>1982</option><option>1983</option><option>1984</option><option>1985</option><option>1986</option><option>1987</option><option>1988</option><option>1989</option><option>1990</option><option>1991</option><option>1992</option><option>1993</option><option>1994</option><option>1995</option><option>1996</option><option>1997</option><option>1998</option><option>1999</option><option>2000</option><option>2001</option><option>2002</option><option>2003</option><option>2004</option><option>2005</option><option>2006</option><option>2007</option><option>2008</option><option>2009</option><option>2010</option><option>2011</option><option>2012</option><option>2013</option><option>2014</option><option>2015</option><option>2016</option><option>2017</option><option>2018</option><option>2019</option><option>2020</option><option>2021</option><option>2022</option><option>2023</option><option>2024</option><option>2025</option><option>2026</option>
               </select>
             </div>
           </div>
@@ -957,7 +955,10 @@ var CHART_BUILDER_TABS = [
   { id: 'cb_debt',      gid: '1266527479',     label: 'TSH+p3 - Debt',      anchor: null },
   { id: 'cb_g1ops',     gid: '2422308', label: 'p3g1 - Ops Metrics',       anchor: 'Aggregate Members' },
   { id: 'cb_coaching_accrual', gid: '567022197', label: 'p3 Coaching - Accrual', anchor: null },
-  { id: 'cb_coaching_ops',     gid: '1081849810', label: 'p3 Coaching - Ops Metrics', anchor: 'Client Count by Month' }
+  { id: 'cb_coaching_ops',     gid: '1081849810', label: 'p3 Coaching - Ops Metrics', anchor: 'Client Count by Month' },
+  /* Economic Metrics: daily FRED/Fed data. downsample:'monthly' collapses ~29k daily
+     rows to month-end (last non-empty per column) so charts are legible and long-range. */
+  { id: 'cb_econ',             gid: '1696126690', label: 'Economic Metrics', anchor: null, downsample: 'monthly' }
 ];
 
 var OG_IMAGES = {
@@ -974,6 +975,7 @@ var CONTEXT_FIELDS = {
     { id:'sgRolledFinancial',    label:'TSH + proof3 Rolled Up Financial Updates', type:'textarea', rows:3, placeholder:'e.g. Total revenue $161k, expenses $145k, cash $244k. Net break-even after eliminations.' },
     { id:'sgTshOps',             label:'TSH Operational Update', type:'textarea', rows:3, placeholder:'e.g. SHA: 2 active advisory engagements. SHC clean. New LOI under review.' },
     { id:'sgP3Ops',              label:'proof3 Operational Update', type:'textarea', rows:3, placeholder:'e.g. Gym at 91 members. Coaching MRR up 8%. Lease for gym 2 in negotiation.' },
+    { id:'econNotes',            label:'Economic Notes', type:'textarea', rows:3, placeholder:'Your read on the macro backdrop this month — what you want the Economic Data section to emphasize and how it bears on strategy. Pulls the Economic Metrics sheet + live web context.' },
     { id:'sgTopFocus',           label:'Top Focus', type:'textarea', rows:3, placeholder:'e.g. Closing 100 gym members. Hire growth lead. Get lease signed by end of quarter.' },
     { id:'sgSupporting',         label:'Any Additional Supporting Information', type:'textarea', rows:3, placeholder:'Anything else worth weaving into the newsletter where it fits.' }
   ],
@@ -1005,6 +1007,7 @@ var CONTEXT_FIELDS = {
     { id:'p3RolledFinancial',    label:'proof3 Rolled Up Financial Updates', type:'textarea', rows:3, placeholder:'e.g. Total proof3 revenue $58k, expenses $72k, net -$14k. Cash position $X. Path to breakeven Y months.' },
     { id:'p3GymsOps',            label:'proof3 Gyms Operational Update', type:'textarea', rows:3, placeholder:'e.g. Gym 1 at 91 members (+5 MoM). 8 trial members in pipeline. Gym 2 lease in negotiation.' },
     { id:'p3CoachingOps',        label:'proof3 Online Coaching Operational Update', type:'textarea', rows:3, placeholder:'e.g. 312 active clients, MRR $X, churn 4%, NPS 67. Two new programs launched.' },
+    { id:'econNotes',            label:'Economic Notes', type:'textarea', rows:3, placeholder:'Your read on the macro backdrop this month — what you want the Economic Data section to emphasize and how it bears on strategy. Pulls the Economic Metrics sheet + live web context.' },
     { id:'p3TopFocus',           label:'Top Focus', type:'textarea', rows:3, placeholder:'e.g. Hit 100 gym members. Close gym 2 lease. Hire coaching ops lead.' },
     { id:'p3Supporting',         label:'Any Additional Supporting Information', type:'textarea', rows:3, placeholder:'Anything else worth weaving into the newsletter where it fits.' }
   ]
@@ -1394,6 +1397,8 @@ function getVal(id) { var el = document.getElementById(id); return el ? el.value
 
 function buildContext() {
   return {
+    /* Shared macro note — feeds the Economic Data section for both entity types */
+    econNotes:           getVal('econNotes'),
     /* gym/coaching/old fields kept for proof3+SPV1 path */
     gym: { memberStory:getVal('memberStory'), gym1Target:getVal('gym1MemberTarget'), p3cTarget:getVal('p3cClientTarget') },
     coaching:  {},
@@ -1748,6 +1753,37 @@ function buildCoachingOpsContext(coaching) {
 
 var _tabDataCache = {};   /* keyed by tab id */
 
+/* Collapse daily rows to one row per calendar month. For each column we keep the
+   LAST non-empty value seen within the month (month-end value, carrying the most
+   recent reading forward for series that update weekly/monthly). col[0] (date)
+   advances to the latest date in the month so downstream date parsers still work. */
+function downsampleMonthly(rows) {
+  if (!rows || !rows.length) return rows;
+  function pkey(s) {
+    var m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) return m[3] + '-' + m[1];
+    var d = new Date(s);
+    return isNaN(d) ? null : (d.getFullYear() + '-' + (d.getMonth() + 1));
+  }
+  var out = [], curKey = null, acc = null;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i], key = pkey(r[0]);
+    if (!key) continue;
+    if (key !== curKey) {
+      if (acc) out.push(acc);
+      curKey = key;
+      acc = r.slice();
+    } else {
+      acc[0] = r[0]; /* advance to latest date in the month */
+      for (var c = 1; c < r.length; c++) {
+        if (r[c] !== undefined && String(r[c]).trim() !== '') acc[c] = r[c];
+      }
+    }
+  }
+  if (acc) out.push(acc);
+  return out;
+}
+
 async function fetchTabData(tab) {
   if (_tabDataCache[tab.id]) return _tabDataCache[tab.id];
   if (!tab.gid || tab.gid.indexOf('PENDING') === 0) return null;
@@ -1776,6 +1812,9 @@ async function fetchTabData(tab) {
     for (var i = hdrIdx + 1; i < rows.length; i++) {
       if (rows[i][0] && /\d/.test(rows[i][0])) dataRows.push(rows[i]);
     }
+    /* Daily tabs (e.g. Economic Metrics) collapse to monthly so charts stay legible
+       and can span many years without plotting thousands of daily points. */
+    if (tab.downsample === 'monthly') dataRows = downsampleMonthly(dataRows);
     var result = { tab: tab, hdr: hdr, dataRows: dataRows };
     _tabDataCache[tab.id] = result;
     return result;
@@ -1878,6 +1917,84 @@ function resolveMetricSel(selId) {
   return null;
 }
 
+/* === ECONOMIC DATA (monthly sheet tab + live web context) === */
+
+/* Build a compact trailing-window monthly table from the Economic Metrics tab.
+   Returns raw values (not fmt'd) so the model reads true index levels, and skips
+   columns that are entirely empty within the window to cut noise. */
+async function fetchEconomicData(monthsBack) {
+  var econTab = null;
+  for (var t = 0; t < CHART_BUILDER_TABS.length; t++) {
+    if (CHART_BUILDER_TABS[t].id === 'cb_econ') { econTab = CHART_BUILDER_TABS[t]; break; }
+  }
+  if (!econTab) return null;
+  var data = await fetchTabData(econTab); /* monthly-downsampled + cached */
+  if (!data || !data.hdr || !data.dataRows || !data.dataRows.length) return null;
+  var hdr = data.hdr, rows = data.dataRows;
+  var window = rows.slice(-(monthsBack || 36));
+  /* Which metric columns have at least one value in the window */
+  var cols = [];
+  for (var j = 1; j < hdr.length; j++) {
+    if (!hdr[j] || !hdr[j].trim()) continue;
+    var hasVal = false;
+    for (var i = 0; i < window.length; i++) {
+      if (window[i][j] !== undefined && String(window[i][j]).trim() !== '') { hasVal = true; break; }
+    }
+    if (hasVal) cols.push(j);
+  }
+  if (!cols.length) return null;
+  function mLabel(s) {
+    var d = parseRowDate(s); /* "M/D/YYYY" -> Date */
+    if (!d) return String(s || '').trim();
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  }
+  var head = 'Month\t' + cols.map(function(j) { return hdr[j].trim(); }).join('\t');
+  var lines = [head, '----'];
+  for (var r = 0; r < window.length; r++) {
+    var vals = [mLabel(window[r][0])];
+    for (var c = 0; c < cols.length; c++) {
+      var v = window[r][cols[c]];
+      vals.push((v === undefined || String(v).trim() === '') ? '' : String(v).trim());
+    }
+    lines.push(vals.join('\t'));
+  }
+  var first = mLabel(window[0][0]), last = mLabel(window[window.length - 1][0]);
+  return { table: lines.join('\n'), rangeLabel: first + ' to ' + last, monthCount: window.length };
+}
+
+/* Pull a tight, current macro brief via the worker's web_search proxy. Returns raw
+   notes for the writer to draw on — NOT finished copy. Degrades to '' on any failure
+   so a newsletter still generates without it. */
+async function fetchEconomicContext() {
+  try {
+    var nowD = new Date();
+    var MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var asOf = MN[nowD.getMonth()] + ' ' + nowD.getFullYear();
+    var sys = 'You are a macroeconomic research assistant. Use web search to gather the most recent, credible figures. ' +
+      'Return compact factual notes (about 150-200 words, short prose lines, no preamble) as raw material for a newsletter writer — not finished copy. ' +
+      'Cover, with current levels and recent direction where available: U.S. Fed policy stance and the rate path; latest CPI/inflation trend; the labor market; equity markets (S&P 500 level and recent move); volatility (VIX); credit spreads / financial-conditions tone; and one line on overall macro tone. ' +
+      'Prefer Fed, BLS, Treasury, and major financial press. State figures plainly with their as-of timing. Do not fabricate; omit anything you cannot source.';
+    var usr = 'Compile a current U.S. macro brief as of ' + asOf + ' for an investor newsletter. Focus on what changed recently and what it implies for a small fitness/health holding company watching rates, consumer spending, and credit conditions.';
+    var resp = await fetch(WORKER_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1200,
+        system: sys,
+        messages: [{ role: 'user', content: usr }],
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }]
+      })
+    });
+    if (!resp.ok) return '';
+    var data = await resp.json();
+    if (!data || !data.content || !Array.isArray(data.content)) return '';
+    /* Concatenate only the text blocks — tool_use / tool_result blocks are interleaved */
+    var txt = data.content.filter(function(b) { return b && b.type === 'text' && b.text; })
+                          .map(function(b) { return b.text; }).join('\n').trim();
+    return txt;
+  } catch (e) { console.log('Economic web context unavailable:', e && e.message); return ''; }
+}
+
 /* === GENERATE === */
 async function generate() {
   saveContextFields(); /* persist inputs before generating */
@@ -1909,12 +2026,18 @@ async function generate() {
     var sel = document.getElementById('dateRangePreset'), preset = sel ? sel.value : '12';
     var fRows = getFilteredRows(sd.allRows), fTable = rowsToTable(fRows, sd.hdr);
     var fLabel = getRangeLabel(preset, sd.earliestDate, sd.latestDate);
-    showStatus('loading', 'Loaded ' + sd.rowCount + ' months. Calling Claude...');
+    showStatus('loading', 'Loaded ' + sd.rowCount + ' months. Gathering economic context...');
+    /* Economic Data section inputs: monthly sheet tab + live macro web brief (parallel) */
+    var econResults = await Promise.all([
+      fetchEconomicData(36).catch(function() { return null; }),
+      fetchEconomicContext()
+    ]);
+    var econData = econResults[0], econContext = econResults[1];
     btn.innerHTML = '<span class="spinner"></span>Writing newsletter...';
-    var ctx = buildContext(), prompts = buildPrompts(currentType, sd, fTable, fLabel, ctx, opsData, coachingOpsData);
+    var ctx = buildContext(), prompts = buildPrompts(currentType, sd, fTable, fLabel, ctx, opsData, coachingOpsData, econData, econContext);
     var resp = await fetch(WORKER_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: prompts.system, messages: [{ role: 'user', content: prompts.user }] })
+      body: JSON.stringify({ system: prompts.system, messages: [{ role: 'user', content: prompts.user }], max_tokens: 5000 })
     });
     if (!resp.ok) throw new Error('Worker HTTP ' + resp.status);
     var result = await resp.json();
@@ -2908,7 +3031,7 @@ function exportToDoc() {
 }
 
 /* === PROMPT BUILDER === */
-function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachingOpsData) {
+function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachingOpsData, econData, econContext) {
   var cfg = SHEET_CONFIGS[type];
   var co  = CHART_OPEN, fc = FENCE_CLOSE;
   var audienceMap = {
@@ -2941,6 +3064,8 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     if (p3.topFocus)           lines.push('\nTOP FOCUS:\n' + p3.topFocus);
     if (p3.supporting)         lines.push('\nADDITIONAL SUPPORTING INFO (weave the spirit of this into the most appropriate sections — do not include verbatim, do not give it its own header):\n' + p3.supporting);
   }
+  /* Shared macro note — applies to the Economic Data section for both entity types */
+  if (ctx.econNotes) lines.push('\nECONOMIC NOTES (Jim\'s read on the macro backdrop — weave into the Economic Data section, do not give it its own sub-header):\n' + ctx.econNotes);
   var opCtx = lines.join('\n');
 
   /* Compute month/year for H1 subtitle */
@@ -2958,12 +3083,14 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
       'TSH + proof3 Rolled Up Financial Updates',
       'TSH Operational Update',
       'proof3 Operational Update',
+      'Economic Data',
       'Top Focus'
     ];
     chartPlacement =
       '   - Financial/revenue/expense/cash/profit charts → under "## TSH + proof3 Rolled Up Financial Updates"\n' +
       '   - TSH operational charts (advisory revenue, portfolio metrics) → under "## TSH Operational Update"\n' +
       '   - proof3 operational charts (gym members, coaching clients, gym revenue) → under "## proof3 Operational Update"\n' +
+      '   - Economic/macro charts (S&P, VIX, rates, credit spreads, money supply) → under "## Economic Data" (exactly 3 here)\n' +
       '   - If a chart could fit two sections, prefer the more specific (operational) one.\n';
   } else {
     /* proof3+SPV1 — parallel 5-H2 structure */
@@ -2972,12 +3099,14 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
       'proof3 Rolled Up Financial Updates',
       'proof3 Gyms Operational Update',
       'proof3 Online Coaching Operational Update',
+      'Economic Data',
       'Top Focus'
     ];
     chartPlacement =
       '   - Financial/revenue/expense/cash/profit charts → under "## proof3 Rolled Up Financial Updates"\n' +
       '   - Gym member/visit/retention charts → under "## proof3 Gyms Operational Update"\n' +
       '   - Coaching client/MRR/churn charts → under "## proof3 Online Coaching Operational Update"\n' +
+      '   - Economic/macro charts (S&P, VIX, rates, credit spreads, money supply) → under "## Economic Data" (exactly 3 here)\n' +
       '   - If a chart could fit two sections, prefer the more specific (operational) one.\n';
   }
   var h2Block = '';
@@ -3012,10 +3141,14 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     '4. Blank line, then ' + h2List.length + ' ## H2 sections in this EXACT order and with these EXACT names:\n' +
     h2Block +
     '5. Each H2 has 2-4 short paragraphs (no bullet lists).\n' +
-    '6. Include EXACTLY 4 chart JSON blocks — no more, no fewer. Place each chart UNDER the most appropriate H2:\n' +
+    '6. Include EXACTLY 7 chart JSON blocks — no more, no fewer: 4 company charts + 3 economic charts. Place each UNDER the most appropriate H2:\n' +
     chartPlacement +
     '7. 1-2 sentences before each chart explaining the so-what (not what the chart shows).\n' +
-    '8. Total word count for prose: 700-900 words across all sections combined.\n\n' +
+    '8. Total word count for prose: under 1200 words across all sections combined.\n\n' +
+    'ECONOMIC DATA SECTION (the "## Economic Data" H2):\n' +
+    '- Synthesize the ECONOMIC METRICS table and the MACRO WEB BRIEF (both provided in the user message) into 2-3 tight paragraphs on the current macro backdrop: rates, inflation, labor, equities, volatility, and credit conditions.\n' +
+    '- Use the MACRO WEB BRIEF for current EXTERNAL figures and the ECONOMIC METRICS table for the 3 charts. If the web brief is absent, write from the table and Economic Notes alone and do NOT fabricate external figures.\n' +
+    '- You MUST close the section with one sentence connecting the macro picture to THIS entity\'s strategy and Top Focus (All Entities: the SageHouse + proof3 group; proof3+SPV1: proof3\'s path to profitability). Same factual spirit either way, but the connector is entity-specific.\n\n' +
     'CHART RULES - CRITICAL:\n' +
     '- Only use data explicitly in the tables. x-axis key must be "date". Allowed types: bar, line, area.\n' +
     '- Colors: ' + cc + '. For mostly-negative series use "#C0392B".\n' +
@@ -3033,10 +3166,12 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     (opCtx ? 'CONTEXT THIS MONTH (treat this as ground truth — do not contradict it with data):\n' + opCtx + '\n\n' : 'No additional context provided.\n\n') +
     (opsData ? 'GYM OPERATING METRICS (from Google Sheet — use for gym member trends):\n' + buildOpsContext(opsData) + '\n\n' : '') +
     (coachingOpsData ? 'COACHING OPERATING METRICS (from Google Sheet — use for coaching client trends):\n' + buildCoachingOpsContext(coachingOpsData) + '\n\n' : '') +
+    (econData ? 'ECONOMIC METRICS (monthly, from Google Sheet — source for the 3 Economic Data charts and the macro narrative; range ' + econData.rangeLabel + '):\n' + econData.table + '\n\n' : '') +
+    (econContext ? 'MACRO WEB BRIEF (current external economic context gathered live from the web — use for the Economic Data narrative; state figures plainly with their timing, do not fabricate):\n' + econContext + '\n\n' : '') +
     'INSTRUCTIONS: Write the ' + cfg.label + ' newsletter. ' +
     'Use the financial data above. ' +
-    'Include exactly 4 chart JSON blocks. ' +
-    'Keep prose under 700 words. ' +
+    'Include exactly 7 chart JSON blocks (4 company + 3 economic). ' +
+    'Keep total prose under 1200 words. ' +
     'Write entirely in Jim\'s voice. ' +
     'Do not state any gym member numbers unless they appear in the context section above.';
   return { system: system, user: user };
