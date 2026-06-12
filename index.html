@@ -80,7 +80,8 @@
     .context-field label { display: block; font-size: 10px; font-weight: 700; color: var(--muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.6px; }
     .context-field input, .context-field textarea { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 12px; font-family: var(--font-ui); color: var(--text); background: var(--bg); transition: border-color 0.15s, background 0.3s; }
     .context-field input:focus, .context-field textarea:focus { outline: none; border-color: var(--primary); }
-    .context-field textarea { resize: vertical; line-height: 1.5; }
+    .context-field textarea { resize: vertical; line-height: 1.5; transition: min-height 0.18s ease, border-color 0.15s, background 0.3s; }
+    .context-field textarea:focus { min-height: 150px; }
     .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .generate-btn { width: 100%; padding: 13px; background: var(--btn-bg); color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.15s; letter-spacing: 0.3px; }
     .generate-btn:hover:not(:disabled) { background: var(--btn-hover); }
@@ -975,6 +976,7 @@ var CONTEXT_FIELDS = {
     { id:'sgRolledFinancial',    label:'TSH + proof3 Rolled Up Financial Updates', type:'textarea', rows:3, placeholder:'e.g. Total revenue $161k, expenses $145k, cash $244k. Net break-even after eliminations.' },
     { id:'sgTshOps',             label:'TSH Operational Update', type:'textarea', rows:3, placeholder:'e.g. SHA: 2 active advisory engagements. SHC clean. New LOI under review.' },
     { id:'sgP3Ops',              label:'proof3 Operational Update', type:'textarea', rows:3, placeholder:'e.g. Gym at 91 members. Coaching MRR up 8%. Lease for gym 2 in negotiation.' },
+    { id:'techLens',             label:'Technology Lens', type:'textarea', rows:3, placeholder:'What we\'re building this month — product, platform, tooling, or portfolio tech. Feeds the Technology section; you\'ll embed screenshots/video demos there directly.' },
     { id:'econNotes',            label:'Economic Notes', type:'textarea', rows:3, placeholder:'Your read on the macro backdrop this month — what you want the Economic Data section to emphasize and how it bears on strategy. Pulls the Economic Metrics sheet + live web context.' },
     { id:'sgTopFocus',           label:'Top Focus', type:'textarea', rows:3, placeholder:'e.g. Closing 100 gym members. Hire growth lead. Get lease signed by end of quarter.' },
     { id:'sgSupporting',         label:'Any Additional Supporting Information', type:'textarea', rows:3, placeholder:'Anything else worth weaving into the newsletter where it fits.' }
@@ -1007,6 +1009,7 @@ var CONTEXT_FIELDS = {
     { id:'p3RolledFinancial',    label:'proof3 Rolled Up Financial Updates', type:'textarea', rows:3, placeholder:'e.g. Total proof3 revenue $58k, expenses $72k, net -$14k. Cash position $X. Path to breakeven Y months.' },
     { id:'p3GymsOps',            label:'proof3 Gyms Operational Update', type:'textarea', rows:3, placeholder:'e.g. Gym 1 at 91 members (+5 MoM). 8 trial members in pipeline. Gym 2 lease in negotiation.' },
     { id:'p3CoachingOps',        label:'proof3 Online Coaching Operational Update', type:'textarea', rows:3, placeholder:'e.g. 312 active clients, MRR $X, churn 4%, NPS 67. Two new programs launched.' },
+    { id:'techLens',             label:'Technology Lens', type:'textarea', rows:3, placeholder:'What we\'re building this month — product, platform, tooling, or portfolio tech. Feeds the Technology section; you\'ll embed screenshots/video demos there directly.' },
     { id:'econNotes',            label:'Economic Notes', type:'textarea', rows:3, placeholder:'Your read on the macro backdrop this month — what you want the Economic Data section to emphasize and how it bears on strategy. Pulls the Economic Metrics sheet + live web context.' },
     { id:'p3TopFocus',           label:'Top Focus', type:'textarea', rows:3, placeholder:'e.g. Hit 100 gym members. Close gym 2 lease. Hire coaching ops lead.' },
     { id:'p3Supporting',         label:'Any Additional Supporting Information', type:'textarea', rows:3, placeholder:'Anything else worth weaving into the newsletter where it fits.' }
@@ -1083,6 +1086,18 @@ function renderContextFields(type) {
   restoreContextFields();
   /* Wire up persistence listener */
   setupContextFieldPersistence();
+  /* Auto-grow textareas while focused so long entries stay fully visible; collapse on blur */
+  if (container && !container._autoGrowWired) {
+    container._autoGrowWired = true;
+    var grow = function(el) {
+      if (!el || el.tagName !== 'TEXTAREA') return;
+      el.style.height = 'auto';
+      el.style.height = Math.max(el.scrollHeight, 150) + 'px';
+    };
+    container.addEventListener('focusin',  function(e) { if (e.target && e.target.tagName === 'TEXTAREA') grow(e.target); });
+    container.addEventListener('input',    function(e) { if (e.target && e.target.tagName === 'TEXTAREA' && document.activeElement === e.target) grow(e.target); });
+    container.addEventListener('focusout', function(e) { if (e.target && e.target.tagName === 'TEXTAREA') e.target.style.height = ''; });
+  }
 }
 
 /* === TYPE SWITCHING === */
@@ -1399,6 +1414,8 @@ function buildContext() {
   return {
     /* Shared macro note — feeds the Economic Data section for both entity types */
     econNotes:           getVal('econNotes'),
+    /* Shared technology note — feeds the Technology section for both entity types */
+    techLens:            getVal('techLens'),
     /* gym/coaching/old fields kept for proof3+SPV1 path */
     gym: { memberStory:getVal('memberStory'), gym1Target:getVal('gym1MemberTarget'), p3cTarget:getVal('p3cClientTarget') },
     coaching:  {},
@@ -3064,6 +3081,8 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     if (p3.topFocus)           lines.push('\nTOP FOCUS:\n' + p3.topFocus);
     if (p3.supporting)         lines.push('\nADDITIONAL SUPPORTING INFO (weave the spirit of this into the most appropriate sections — do not include verbatim, do not give it its own header):\n' + p3.supporting);
   }
+  /* Shared technology note — feeds the Technology section for both entity types */
+  if (ctx.techLens) lines.push('\nTECHNOLOGY LENS (Jim\'s notes on what we\'re building — basis for the Technology section):\n' + ctx.techLens);
   /* Shared macro note — applies to the Economic Data section for both entity types */
   if (ctx.econNotes) lines.push('\nECONOMIC NOTES (Jim\'s read on the macro backdrop — weave into the Economic Data section, do not give it its own sub-header):\n' + ctx.econNotes);
   var opCtx = lines.join('\n');
@@ -3083,6 +3102,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
       'TSH + proof3 Rolled Up Financial Updates',
       'TSH Operational Update',
       'proof3 Operational Update',
+      'Technology',
       'Economic Data',
       'Top Focus'
     ];
@@ -3099,6 +3119,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
       'proof3 Rolled Up Financial Updates',
       'proof3 Gyms Operational Update',
       'proof3 Online Coaching Operational Update',
+      'Technology',
       'Economic Data',
       'Top Focus'
     ];
@@ -3134,6 +3155,10 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     '- When describing direction of change (up/down/dropped/grew), double-check: if the newer value is higher, it grew. If lower, it dropped.\n' +
     '- Expenses are always positive numbers. Net Operating Income can be positive or negative. Never confuse them in charts or text.\n' +
     '- If a value is zero or missing for early months (before an entity existed), acknowledge the entity was not yet operating.\n\n' +
+    'EDITORIAL DISCRETION:\n' +
+    '- The context inputs below are raw material for a FIRST DRAFT. Use what makes the strongest, clearest newsletter — you are NOT required to include every input or every detail provided.\n' +
+    '- Prioritize the most important, timely, and investor-relevant items; compress or omit weaker or redundant material rather than forcing it in.\n' +
+    '- This latitude is about what to INCLUDE, not about accuracy: never fabricate, never contradict the provided facts or the data tables, and always treat the One-Sentence Summary as the source of truth for the dek.\n\n' +
     'FORMAT — STRICT STRUCTURE (follow exactly):\n' +
     '1. Begin with H1: # ' + h1Title + '\n' +
     '2. Immediately below H1, on its own line: ' + monthYearLabel + '  (NO heading marks — this is a subtitle date)\n' +
@@ -3145,6 +3170,11 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     chartPlacement +
     '7. 1-2 sentences before each chart explaining the so-what (not what the chart shows).\n' +
     '8. Total word count for prose: under 1200 words across all sections combined.\n\n' +
+    'TECHNOLOGY SECTION (the "## Technology" H2):\n' +
+    '- Draw on the TECHNOLOGY LENS input (in the context above) to write 1-2 tight paragraphs on what we are building and why it matters — product, platform, tooling, or the early-stage fitness/health/wellness tech we hold equity in.\n' +
+    '- This is a prose section with NO charts. (Visual demos — screenshots and short videos — are embedded here separately by Jim, so leave the narrative clean and let the demos carry the show-and-tell.)\n' +
+    '- Under EDITORIAL DISCRETION: if there is little or no technology to report this month, keep the section to a brief honest line rather than padding it.\n' +
+    '- Close with one sentence connecting the technology to THIS entity\'s strategy (All Entities: the SageHouse + proof3 group; proof3+SPV1: proof3\'s product and path to profitability).\n\n' +
     'ECONOMIC DATA SECTION (the "## Economic Data" H2):\n' +
     '- Synthesize the ECONOMIC METRICS table and the MACRO WEB BRIEF (both provided in the user message) into 2-3 tight paragraphs on the current macro backdrop: rates, inflation, labor, equities, volatility, and credit conditions.\n' +
     '- Use the MACRO WEB BRIEF for current EXTERNAL figures and the ECONOMIC METRICS table for the 3 charts. If the web brief is absent, write from the table and Economic Notes alone and do NOT fabricate external figures.\n' +
@@ -3562,6 +3592,9 @@ async function saveToCloud() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text: content,
+        charts:       allCharts[currentType] || [],
+        customCharts: customCharts[currentType] || [],
+        inlineCharts: (selectedCharts[currentType] && selectedCharts[currentType].length) ? selectedCharts[currentType] : (allCharts[currentType] || []),
         type: currentType,
         title: (cfg.label || '') + ' Newsletter',
         name: name.trim(),
