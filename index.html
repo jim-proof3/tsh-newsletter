@@ -456,6 +456,9 @@
         body.investor-view .chart-embed button[onclick*="removeInlineChart"] { display: none !important; }
         body.investor-view .chart-card button[onclick*="removeGeneratedChart"] { display: none !important; }
         body.investor-view .chart-card button[onclick*="removeCustomChart"] { display: none !important; }
+        /* Hide the drag/remove header on uploaded media (images + videos) for investors */
+        body.investor-view .image-draggable > div:first-child { display: none !important; }
+        body.investor-view .image-draggable[draggable="true"] { cursor: default !important; }
         
         /* Uniform background in shared link view - no color difference between text area and edges */
         body.investor-view .output { background: var(--bg) !important; }
@@ -735,8 +738,8 @@
           <button onclick="insertLink()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Insert link">&#128279;</button>
           <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
           <label style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;white-space:nowrap;">
-            &#128247; Add Image
-            <input type="file" id="imageUpload" accept="image/*" onchange="insertImage(this)" style="display:none;">
+            &#128247; Add Image / Video
+            <input type="file" id="imageUpload" accept="image/*,video/*" onchange="insertImage(this)" style="display:none;">
           </label>
           <button onclick="updateTOC()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;white-space:nowrap;">&#8635; Update TOC</button>
         </div>
@@ -2338,7 +2341,10 @@ function setupDragDrop(body) {
   body._ddr = function(e) {
     e.preventDefault(); e.stopPropagation(); body.classList.remove('drag-over');
     var files = e.dataTransfer.files;
-    for (var i = 0; i < files.length; i++) { if (files[i].type.indexOf('image') === 0) readAndInsertImage(files[i]); }
+    for (var i = 0; i < files.length; i++) {
+      var ft = files[i].type || '';
+      if (ft.indexOf('image') === 0 || ft.indexOf('video') === 0) uploadAndInsertMedia(files[i]);
+    }
   };
   body.addEventListener('dragover', body._dgo); body.addEventListener('dragleave', body._dgl); body.addEventListener('drop', body._ddr);
 }
@@ -2347,46 +2353,77 @@ function teardownDragDrop(body) {
   if (body._dgl) body.removeEventListener('dragleave', body._dgl);
   if (body._ddr) body.removeEventListener('drop',      body._ddr);
 }
-function insertImage(input) { var f = input.files[0]; if (f) readAndInsertImage(f); input.value = ''; }
-function readAndInsertImage(file) {
-  /* Capture cursor position BEFORE async read (toolbar click may have moved focus) */
+function insertImage(input) { var f = input.files[0]; if (f) uploadAndInsertMedia(f); input.value = ''; }
+
+/* Upload an image or video to R2 via the worker, then insert it into the newsletter
+   body reusing the existing draggable/removable wrapper. Media persists automatically
+   because it lives in body.innerHTML, which every save path stores. */
+async function uploadAndInsertMedia(file) {
+  /* Capture cursor position BEFORE the async upload (toolbar click may have moved focus) */
   var savedRange = _savedEditRange;
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var img = document.createElement('img'); img.src = e.target.result;
-    img.style.cssText = 'max-width:100%;border-radius:8px;display:block;';
-    /* Wrap in a draggable container */
-    var wrapper = document.createElement('div');
-    wrapper.className = 'image-draggable';
-    wrapper.setAttribute('contenteditable', 'false');
-    wrapper.setAttribute('draggable', 'true');
-    wrapper.style.cssText = 'margin:16px 0;position:relative;cursor:grab;';
-    wrapper.innerHTML = '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
-      '<span style="font-size:11px;color:var(--muted);user-select:none;cursor:grab;" title="Drag to reposition">&#8597; drag</span>' +
-      '<button onclick="this.closest(\'.image-draggable\').remove();showStatus(\'.success\',\'Image removed.\');" style="border:none;background:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0 0 0 8px;user-select:none;" title="Remove image">&#10005;</button>' +
-      '</div>';
-    wrapper.appendChild(img);
-    var body = document.getElementById('newsletterBody'); if (!body) return;
-    /* Use saved cursor position from before toolbar click */
-    var range = savedRange;
-    if (range && body.contains(range.startContainer)) {
-      var toc = document.getElementById('newsletter-toc');
-      if (toc && toc.contains(range.startContainer)) {
-        if (toc.nextSibling) body.insertBefore(wrapper, toc.nextSibling);
-        else body.appendChild(wrapper);
-      } else {
-        range.collapse(false); range.insertNode(wrapper);
-        var after = document.createRange(); after.setStartAfter(wrapper); after.collapse(true);
-        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(after);
-      }
+  var isVideo = /^video\//.test(file.type);
+  var isImage = /^image\//.test(file.type);
+  if (!isVideo && !isImage) { showStatus('error', 'Only image or video files are supported.'); return; }
+  if (file.size > 52428800) { showStatus('error', 'File too large (max 50MB). For longer clips, host the video elsewhere and link it.'); return; }
+
+  showStatus('loading', (isVideo ? 'Uploading video' : 'Uploading image') + ' (' + Math.round(file.size/1048576*10)/10 + ' MB)…');
+  var url;
+  try {
+    var resp = await fetch(WORKER_URL + '/media', {
+      method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file
+    });
+    if (!resp.ok) { var er = await resp.json().catch(function(){ return {}; }); throw new Error(er.error || ('HTTP ' + resp.status)); }
+    var data = await resp.json();
+    url = data.url;
+    if (!url) throw new Error('No URL returned');
+  } catch (e) { showStatus('error', 'Upload failed: ' + e.message); return; }
+
+  /* Build the media element */
+  var mediaEl;
+  if (isVideo) {
+    mediaEl = document.createElement('video');
+    mediaEl.src = url; mediaEl.controls = true; mediaEl.setAttribute('preload', 'metadata');
+    mediaEl.setAttribute('playsinline', '');
+    mediaEl.style.cssText = 'max-width:100%;border-radius:8px;display:block;background:#000;';
+  } else {
+    mediaEl = document.createElement('img');
+    mediaEl.src = url;
+    mediaEl.style.cssText = 'max-width:100%;border-radius:8px;display:block;';
+  }
+
+  /* Reuse the existing draggable/removable image wrapper for drag + remove parity */
+  var wrapper = document.createElement('div');
+  wrapper.className = 'image-draggable';
+  wrapper.setAttribute('contenteditable', 'false');
+  wrapper.setAttribute('draggable', 'true');
+  wrapper.style.cssText = 'margin:16px 0;position:relative;cursor:grab;';
+  wrapper.innerHTML = '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
+    '<span style="font-size:11px;color:var(--muted);user-select:none;cursor:grab;" title="Drag to reposition">&#8597; drag</span>' +
+    '<button onclick="this.closest(\'.image-draggable\').remove();var b=document.getElementById(\'newsletterBody\');if(b){newsletters[currentType]=b.innerHTML;autoSave(currentType,b.innerHTML,_lastRawMarkdown[currentType]);}showStatus(\'success\',\'Media removed.\');" style="border:none;background:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0 0 0 8px;user-select:none;" title="Remove">&#10005;</button>' +
+    '</div>';
+  wrapper.appendChild(mediaEl);
+
+  var body = document.getElementById('newsletterBody'); if (!body) return;
+  var range = savedRange;
+  if (range && body.contains(range.startContainer)) {
+    var toc = document.getElementById('newsletter-toc');
+    if (toc && toc.contains(range.startContainer)) {
+      if (toc.nextSibling) body.insertBefore(wrapper, toc.nextSibling);
+      else body.appendChild(wrapper);
     } else {
-      body.appendChild(wrapper);
+      range.collapse(false); range.insertNode(wrapper);
+      var after = document.createRange(); after.setStartAfter(wrapper); after.collapse(true);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(after);
     }
-    /* Set up drag on the new wrapper */
-    if (isEditMode) setupImageDrag(wrapper);
-    showStatus('success', 'Image inserted. Drag to reposition.');
-  };
-  reader.readAsDataURL(file);
+  } else {
+    body.appendChild(wrapper);
+  }
+  if (isEditMode) setupImageDrag(wrapper);
+  /* Persist immediately so the demo rides into autosave/named saves/share with everything else */
+  newsletters[currentType] = body.innerHTML;
+  _editsDirty = true;
+  autoSave(currentType, body.innerHTML, _lastRawMarkdown[currentType]);
+  showStatus('success', (isVideo ? 'Video' : 'Image') + ' inserted. Drag to reposition.');
 }
 
 /* === CHART PICKER === */
