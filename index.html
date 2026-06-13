@@ -285,10 +285,14 @@
         [data-brand="proof3"] .chart-embed canvas { background: transparent; }
         
         /* ── Responsive Design ── */
-        @media (max-width: 900px) {
+        @media (max-width: 1200px) {
+          .app { grid-template-columns: 300px 1fr; }
+          .charts-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 1024px) {
           .app { grid-template-columns: 1fr !important; height: auto !important; }
           .controls { max-height: none; overflow-y: visible; border-right: none; border-bottom: 1px solid var(--border); }
-          .top-bar { flex-wrap: wrap; height: auto; padding: 8px 10px; gap: 4px; }
+          .top-bar { flex-wrap: wrap; height: auto; padding: 8px 10px; gap: 4px; position: relative; }
           .top-bar-spacer { display: none; }
           .top-bar-actions { flex-wrap: wrap; }
           .top-bar-btn { padding: 4px 10px; font-size: 10px; }
@@ -299,6 +303,8 @@
           .charts-grid { grid-template-columns: 1fr !important; }
           .output { padding: 16px 12px; }
           .chart-embed canvas { height: 200px !important; }
+          /* Edit toolbar can't assume a 360px sidebar once stacked */
+          #editToolbar.visible { width: calc(100% - 24px) !important; left: 12px !important; transform: none !important; max-width: none !important; }
         }
         @media (max-width: 600px) {
           * { box-sizing: border-box; }
@@ -325,9 +331,6 @@
         }
         @media (min-width: 1400px) {
           .app { max-width: none; }
-          .output { padding: 28px 36px; }
-          .charts-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
-        }
           .output { padding: 28px 36px; }
           .charts-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
         }
@@ -2845,13 +2848,24 @@ async function shareNewsletter() {
 })();
 
 /* === CHARTS === */
+/* Marker radius scales DOWN as a line/area chart gets longer, so dense long-range
+   series (e.g. decades of monthly economic data) render as a clean line through every
+   point instead of a thick clump of dots. Line still touches all points; hover still
+   reveals them (pointHoverRadius + a generous hit radius). */
+function pointRadiusFor(n) {
+  if (!n || n <= 24)  return 4;   /* up to ~2yr monthly: clear dots */
+  if (n <= 48)        return 3;   /* up to ~4yr */
+  if (n <= 96)        return 2;   /* up to ~8yr */
+  if (n <= 160)       return 1;   /* up to ~13yr */
+  return 0;                        /* longer: line only, no dot clumping */
+}
 function getColors() {
   var brand = document.documentElement.getAttribute('data-brand');
   return brand === 'proof3'
     ? { primary:'#ffffff', secondary:'#ffb347', tertiary:'#7dffb3',
         negative:'#ff6666', grid:'rgba(255,255,255,0.35)', text:'#ffffff',
         chartBg:'rgba(255,255,255,0.06)', tooltipBg:'#0d1926',
-        borderWidth:3, pointRadius:4 }
+        borderWidth:3 }
     : { primary:'#13474A', secondary:'#C0632A', tertiary:'#4A6FA5',
         negative:'#C0392B', grid:'#dde8e0', text:'#303030',
         chartBg:'rgba(255,255,255,0.0)', tooltipBg:'#ffffff' };
@@ -3010,7 +3024,7 @@ function renderSingleChart(canvas, chart) {
       backgroundColor: isBar ? vals.map(function(v) { return v < 0 ? colors.negative+'55' : color+'55'; }) : color+'33',
       borderColor:     isBar ? vals.map(function(v) { return v < 0 ? colors.negative        : color;       }) : color,
       borderWidth: colors.borderWidth || 2, fill: chart.type === 'area', tension: 0.35,
-      pointRadius: colors.pointRadius || (chart.data.length > 24 ? 1 : 3), pointHoverRadius: 6
+      pointRadius: pointRadiusFor(chart.data.length), pointHoverRadius: 6, pointHitRadius: 12
     };
   });
 
@@ -3066,11 +3080,11 @@ function renderDualAxisChart(canvas, chart, labels, colors, brand) {
           { label: label0, data: vals0, yAxisID: 'y',
             borderColor: c0, backgroundColor: c0 + '22',
             borderWidth: colors.borderWidth || 2, fill: false, tension: 0.35,
-            pointRadius: labels.length > 24 ? 1 : 3, pointHoverRadius: 6 },
+            pointRadius: pointRadiusFor(labels.length), pointHoverRadius: 6, pointHitRadius: 12 },
           { label: label1, data: vals1, yAxisID: 'y1',
             borderColor: c1, backgroundColor: c1 + '22',
             borderWidth: colors.borderWidth || 2, fill: false, tension: 0.35,
-            pointRadius: labels.length > 24 ? 1 : 3, pointHoverRadius: 6 }
+            pointRadius: pointRadiusFor(labels.length), pointHoverRadius: 6, pointHitRadius: 12 }
         ]
       },
       options: {
