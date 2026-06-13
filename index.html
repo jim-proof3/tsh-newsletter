@@ -174,6 +174,25 @@
     .newsletter-body ul ul ul, #newsletterBody ul ul ul { list-style: square; }
     .newsletter-body ol ol, #newsletterBody ol ol { list-style: lower-alpha; }
     .newsletter-body ol ol ol, #newsletterBody ol ol ol { list-style: lower-roman; }
+    /* Searchable metric picker (combobox over the native select) */
+    .metric-combo { position: relative; }
+    .metric-combo-trigger { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--border); border-radius:6px; padding:7px 8px; font-size:12px; color:var(--text); background:var(--bg); cursor:pointer; text-align:left; font-family:var(--font-ui); }
+    .metric-combo-trigger:hover { border-color: var(--primary); }
+    .mc-trigger-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+    .mc-trigger-label.mc-empty { color: var(--muted); }
+    .mc-trigger-bucket { color: var(--muted); font-size:10px; font-weight:600; }
+    .mc-caret { color: var(--muted); font-size:10px; flex-shrink:0; }
+    .metric-combo-panel { position:absolute; z-index:60; left:0; right:0; top:calc(100% + 4px); background:var(--surface,var(--bg)); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.18); padding:6px; max-height:340px; display:flex; flex-direction:column; }
+    .metric-combo-search { width:100%; border:1px solid var(--border); border-radius:6px; padding:7px 9px; font-size:12px; color:var(--text); background:var(--bg); margin-bottom:6px; box-sizing:border-box; font-family:var(--font-ui); }
+    .metric-combo-search:focus { outline:none; border-color:var(--primary); }
+    .metric-combo-results { overflow-y:auto; }
+    .metric-combo-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border-radius:5px; cursor:pointer; font-size:12px; color:var(--text); }
+    .metric-combo-item:hover, .metric-combo-item.mc-active { background: rgba(0,0,0,0.06); }
+    .mc-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .mc-bucket { flex-shrink:0; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--muted); background:rgba(0,0,0,0.05); border:1px solid var(--border); border-radius:10px; padding:1px 7px; white-space:nowrap; }
+    .metric-combo-empty { padding:10px 8px; font-size:12px; color:var(--muted); }
+    [data-brand="proof3"] .metric-combo-item:hover, [data-brand="proof3"] .metric-combo-item.mc-active { background: rgba(255,255,255,0.08); }
+    [data-brand="proof3"] .mc-bucket { background: rgba(255,255,255,0.08); }
 
     /* Chart titles in newsletter view */
     .chart-embed-title {
@@ -1191,6 +1210,7 @@ function setType(type, cardEl) {
   renderContextFields(currentType);
   restoreContextFields();
   setupContextFieldPersistence();
+  initMetricCombos();
   /* Apply UI state for currentType (already read from localStorage at declaration).
      But if we're in investor view (?view=...), let checkViewMode set type from URL.
      This avoids overriding the head-script favicon with stale localStorage value. */
@@ -1913,6 +1933,7 @@ async function populateMultiTabChartBuilder() {
   /* Sync to metric2/3 */
   cloneOptionsToSelect('chartBuilderMetric', 'chartBuilderMetric2');
   cloneOptionsToSelect('chartBuilderMetric', 'chartBuilderMetric3');
+  refreshMetricCombo('chartBuilderMetric');
 }
 
 function resolveMetricSel(selId) {
@@ -3828,10 +3849,138 @@ var sheetDataCache = null; /* cached raw sheet data for chart builder */
 var customCharts   = { all: [], p3spv: [] };   /* user-built charts, per type */
 
 /* Populate the metric dropdown once sheet data is loaded */
+/* === Searchable metric picker ===
+   A combobox layered over each native <select>. The selects remain the value store
+   (read by resolveMetricAsync etc.) — the combobox only adds fast search and always
+   shows each metric's source bucket/tab. */
+var METRIC_COMBO_IDS = ['chartBuilderMetric', 'chartBuilderMetric2', 'chartBuilderMetric3'];
+
+function mcEsc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function mcEscapeRx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function mcSubsequence(q, s) { var i = 0; for (var j = 0; j < s.length && i < q.length; j++) { if (s[j] === q[i]) i++; } return i === q.length; }
+
+/* Read a select's options into [{value, name, bucket}]; bucket = nearest preceding divider */
+function mcIndex(selectId) {
+  var sel = document.getElementById(selectId); if (!sel) return [];
+  var out = [], bucket = '';
+  for (var i = 0; i < sel.options.length; i++) {
+    var o = sel.options[i], txt = (o.textContent || '').trim();
+    if (o.disabled) { bucket = txt.replace(/[─—–-]/g, '').trim(); continue; }
+    if (o.value === '') continue;
+    out.push({ value: o.value, name: txt, bucket: bucket });
+  }
+  return out;
+}
+function mcScore(it, q) {
+  var n = it.name.toLowerCase(), b = (it.bucket || '').toLowerCase();
+  if (n === q) return 1000;
+  if (n.indexOf(q) === 0) return 800;
+  if (new RegExp('\\b' + mcEscapeRx(q)).test(n)) return 600;
+  if (n.indexOf(q) >= 0) return 400;
+  if (b.indexOf(q) >= 0) return 220;
+  if (mcSubsequence(q, n)) return 120;
+  return 0;
+}
+function initMetricCombo(selectId) {
+  var sel = document.getElementById(selectId); if (!sel || sel._comboWired) return;
+  sel._comboWired = true;
+  sel.style.display = 'none';
+  var wrap = document.createElement('div');
+  wrap.className = 'metric-combo';
+  wrap.innerHTML =
+    '<button type="button" class="metric-combo-trigger" onclick="toggleMetricCombo(\'' + selectId + '\')">' +
+      '<span class="mc-trigger-label mc-empty">— Select metric —</span><span class="mc-caret">&#9662;</span></button>' +
+    '<div class="metric-combo-panel" style="display:none;">' +
+      '<input type="text" class="metric-combo-search" placeholder="Search metrics\u2026" ' +
+      'oninput="filterMetricCombo(\'' + selectId + '\', this.value)" onkeydown="metricComboKeydown(event, \'' + selectId + '\')">' +
+      '<div class="metric-combo-results"></div></div>';
+  sel.parentNode.insertBefore(wrap, sel);
+}
+function refreshMetricCombo(selectId) {
+  initMetricCombo(selectId);
+  var sel = document.getElementById(selectId); if (!sel) return;
+  var wrap = sel.previousElementSibling; if (!wrap || !wrap.classList.contains('metric-combo')) return;
+  wrap._index = mcIndex(selectId);
+  var lbl = wrap.querySelector('.mc-trigger-label');
+  var cur = wrap._index.filter(function(x) { return x.value === sel.value; })[0];
+  if (lbl) {
+    if (cur) { lbl.innerHTML = mcEsc(cur.name) + (cur.bucket ? ' <span class="mc-trigger-bucket">' + mcEsc(cur.bucket) + '</span>' : ''); lbl.classList.remove('mc-empty'); }
+    else { lbl.textContent = (selectId === 'chartBuilderMetric') ? '— Select metric —' : '— None —'; lbl.classList.add('mc-empty'); }
+  }
+}
+function refreshAllMetricCombos() { for (var i = 0; i < METRIC_COMBO_IDS.length; i++) refreshMetricCombo(METRIC_COMBO_IDS[i]); }
+function initMetricCombos() { refreshAllMetricCombos(); }
+
+function renderMetricResults(selectId, q) {
+  var sel = document.getElementById(selectId); var wrap = sel && sel.previousElementSibling;
+  if (!wrap) return;
+  var box = wrap.querySelector('.metric-combo-results'); if (!box) return;
+  var items = wrap._index || [];
+  q = (q || '').trim().toLowerCase();
+  var ranked;
+  if (!q) { ranked = items.map(function(it) { return { it: it, s: 1 }; }); }
+  else {
+    ranked = [];
+    for (var i = 0; i < items.length; i++) { var s = mcScore(items[i], q); if (s > 0) ranked.push({ it: items[i], s: s }); }
+    ranked.sort(function(a, b) { return b.s - a.s || a.it.name.localeCompare(b.it.name); });
+  }
+  ranked = ranked.slice(0, 60);
+  if (!ranked.length) { box.innerHTML = '<div class="metric-combo-empty">No metrics match \u201C' + mcEsc(q) + '\u201D</div>'; return; }
+  var html = '';
+  for (var k = 0; k < ranked.length; k++) {
+    var it = ranked[k].it;
+    html += '<div class="metric-combo-item' + (k === 0 ? ' mc-active' : '') + '" data-value="' + mcEsc(it.value) + '" ' +
+      'onmousedown="event.preventDefault()" onclick="chooseMetric(\'' + selectId + '\', this.getAttribute(\'data-value\'))">' +
+      '<span class="mc-name">' + mcEsc(it.name) + '</span>' + (it.bucket ? '<span class="mc-bucket">' + mcEsc(it.bucket) + '</span>' : '') + '</div>';
+  }
+  box.innerHTML = html;
+}
+function closeAllMetricCombos() { var p = document.querySelectorAll('.metric-combo-panel'); for (var i = 0; i < p.length; i++) p[i].style.display = 'none'; }
+function toggleMetricCombo(selectId) {
+  var sel = document.getElementById(selectId); var wrap = sel && sel.previousElementSibling; if (!wrap) return;
+  var panel = wrap.querySelector('.metric-combo-panel');
+  var wasOpen = panel.style.display !== 'none';
+  closeAllMetricCombos();
+  if (!wasOpen) {
+    panel.style.display = 'block';
+    var search = wrap.querySelector('.metric-combo-search');
+    if (search) search.value = '';
+    renderMetricResults(selectId, '');
+    setTimeout(function() { if (search) search.focus(); }, 0);
+  }
+}
+function filterMetricCombo(selectId, q) { renderMetricResults(selectId, q); }
+function chooseMetric(selectId, value) {
+  var sel = document.getElementById(selectId); if (!sel) return;
+  sel.value = value;
+  try { sel.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+  refreshMetricCombo(selectId);
+  closeAllMetricCombos();
+}
+function metricComboKeydown(e, selectId) {
+  var sel = document.getElementById(selectId); var wrap = sel && sel.previousElementSibling; if (!wrap) return;
+  var box = wrap.querySelector('.metric-combo-results');
+  var items = box ? box.querySelectorAll('.metric-combo-item') : [];
+  if (e.key === 'Escape') { closeAllMetricCombos(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); var a = box && box.querySelector('.metric-combo-item.mc-active'); if (a) a.click(); else if (items.length) items[0].click(); return; }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault(); if (!items.length) return;
+    var idx = -1; for (var i = 0; i < items.length; i++) { if (items[i].classList.contains('mc-active')) { idx = i; break; } }
+    if (idx >= 0) items[idx].classList.remove('mc-active');
+    idx = (e.key === 'ArrowDown') ? (idx + 1) % items.length : (idx <= 0 ? items.length - 1 : idx - 1);
+    items[idx].classList.add('mc-active');
+    items[idx].scrollIntoView({ block: 'nearest' });
+  }
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest || !e.target.closest('.metric-combo')) closeAllMetricCombos();
+});
+
 function cloneOptionsToSelect(srcId, destId) {
   var src = document.getElementById(srcId), dest = document.getElementById(destId);
   if (!src || !dest) return;
   dest.innerHTML = '<option value="">— None —</option>' + src.innerHTML;
+  refreshMetricCombo(destId);
 }
 
 function updateChartBuilderMetrics() {
@@ -3894,6 +4043,7 @@ function populateChartBuilderMetrics(sheetData, opsData) {
       sel.appendChild(oo);
     }
   }
+  refreshMetricCombo('chartBuilderMetric');
 }
 
 /* Build a chart from the selected metric + date range */
