@@ -1210,7 +1210,7 @@ function setType(type, cardEl) {
   renderContextFields(currentType);
   restoreContextFields();
   setupContextFieldPersistence();
-  initMetricCombos();
+  try { initMetricCombos(); } catch(e) { console.error('[init] metric combos failed (non-fatal):', e); }
   /* Apply UI state for currentType (already read from localStorage at declaration).
      But if we're in investor view (?view=...), let checkViewMode set type from URL.
      This avoids overriding the head-script favicon with stale localStorage value. */
@@ -3853,7 +3853,6 @@ var customCharts   = { all: [], p3spv: [] };   /* user-built charts, per type */
    A combobox layered over each native <select>. The selects remain the value store
    (read by resolveMetricAsync etc.) — the combobox only adds fast search and always
    shows each metric's source bucket/tab. */
-var METRIC_COMBO_IDS = ['chartBuilderMetric', 'chartBuilderMetric2', 'chartBuilderMetric3'];
 
 function mcEsc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function mcEscapeRx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
@@ -3908,7 +3907,7 @@ function refreshMetricCombo(selectId) {
     else { lbl.textContent = (selectId === 'chartBuilderMetric') ? '— Select metric —' : '— None —'; lbl.classList.add('mc-empty'); }
   }
 }
-function refreshAllMetricCombos() { for (var i = 0; i < METRIC_COMBO_IDS.length; i++) refreshMetricCombo(METRIC_COMBO_IDS[i]); }
+function refreshAllMetricCombos() { var ids = ['chartBuilderMetric', 'chartBuilderMetric2', 'chartBuilderMetric3']; for (var i = 0; i < ids.length; i++) refreshMetricCombo(ids[i]); }
 function initMetricCombos() { refreshAllMetricCombos(); }
 
 function renderMetricResults(selectId, q) {
