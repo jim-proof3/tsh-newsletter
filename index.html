@@ -361,11 +361,13 @@
         /* ── Investor View ── */
         body.investor-view { margin:0; padding:0; }
         body.investor-view .top-bar {
-          position:relative; height:auto; padding:16px 20px 12px;
-          flex-direction:column; align-items:flex-start; gap:8px;
+          position:sticky; top:0; z-index:200; height:auto; padding:10px 20px;
+          flex-direction:row; align-items:center; gap:14px;
           box-shadow:0 1px 4px rgba(0,0,0,0.12);
         }
-        body.investor-view .top-bar-tabs { margin-top:4px; }
+        body.investor-view .top-bar-tabs { margin-top:0; }
+        body.investor-view #inputsToggleBtn { display:none !important; }
+        body.investor-view .investor-title { display:none !important; }
         body.investor-view .top-tab-btn { font-size:13px; padding:6px 18px; }
         body.investor-view .top-tab-btn.active { background:rgba(255,255,255,0.22); border-radius:20px; }
         body.investor-view .investor-title {
@@ -373,7 +375,7 @@
         }
         body.investor-view .app-wrapper { margin-top:0; }
         body.investor-view .app { height:auto; display:block; }
-        body.investor-view .output { max-width:720px; margin:0 auto; padding:32px 24px 60px; transition: max-width 0.3s; }
+        body.investor-view .output { max-width:820px; margin:0 auto; padding:32px 24px 60px; transition: max-width 0.3s; }
         body.investor-view.wide-view .output { max-width:1100px; }
         body.investor-view.wide-view #newsletterContent,
         body.investor-view.wide-view #newsletterBody { max-width:100%; }
@@ -390,6 +392,10 @@
         .view-toggle-btn:hover { background:var(--primary); border-color:white; transform:scale(1.05); }
         [data-brand="proof3"] .view-toggle-btn { background:#1f2938; }
         body.investor-view #newsletterBody { font-size:17px; line-height:1.75; max-width:100%; }
+        /* Widen the lighter box but keep the text column where it is (desktop only — mobile stays full-bleed) */
+        @media (min-width: 768px) {
+          body.investor-view #newsletterBody { padding-left:86px; padding-right:86px; }
+        }
         body.investor-view #newsletterBody h1 {
           font-size:26px; font-weight:700; margin:0 0 8px;
           font-family:Georgia,serif; letter-spacing:-0.3px; line-height:1.25;
