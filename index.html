@@ -331,7 +331,7 @@
         }
         @media (max-width: 600px) {
           * { box-sizing: border-box; }
-          html, body { width: 100%; overflow-x: hidden; margin: 0; padding: 0; }
+          html, body { width: 100%; overflow-x: clip; margin: 0; padding: 0; }
           .top-bar { position: relative; }
           .app-wrapper { margin-top: 0; }
           .top-bar-logo img { height: 24px; }
@@ -433,7 +433,7 @@
         @media (max-width:600px) {
           body.investor-view .output { padding:20px 20px 48px; }
           body.investor-view #newsletterContent { padding: 0 4px; }
-          body.investor-view #newsletterBody { padding: 0 4px; }
+          body.investor-view #newsletterBody { padding: 20px 16px; }
           body.investor-view .newsletter-toc { margin-left: 0; margin-right: 0; }
           body.investor-view .chart-embed { margin-left: 0; margin-right: 0; }
           body.investor-view #newsletterBody { font-size:16px; line-height:1.75; }
