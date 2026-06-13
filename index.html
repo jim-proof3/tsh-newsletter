@@ -125,7 +125,8 @@
     .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.3; }
     .empty-state p { font-size: 13px; line-height: 1.6; }
     .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-    .chart-card { background: var(--surface); border-radius: 10px; padding: 18px; border: 1px solid var(--border); transition: background 0.3s;  position:relative; }
+    .chart-card { background: var(--surface); border-radius: 10px; padding: 18px; border: 1px solid var(--border); transition: background 0.3s;  position:relative; min-width: 0; }
+    .chart-card canvas { max-width: 100%; }
     .chart-card-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
 
     /* Edit toolbar */
@@ -188,7 +189,7 @@
     .metric-combo-panel { position:absolute; z-index:60; left:0; right:0; top:calc(100% + 4px); background:var(--surface,var(--bg)); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.18); padding:6px; max-height:min(340px, 60vh); display:flex; flex-direction:column; }
     .metric-combo-search { width:100%; border:1px solid var(--border); border-radius:6px; padding:7px 9px; font-size:12px; color:var(--text); background:var(--bg); margin-bottom:6px; box-sizing:border-box; font-family:var(--font-ui); flex-shrink:0; }
     .metric-combo-search:focus { outline:none; border-color:var(--primary); }
-    .metric-combo-results { overflow-y:auto; min-height:0; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    .metric-combo-results { overflow-y:auto; max-height:min(50vh, 300px); min-height:0; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
     .metric-combo-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border-radius:5px; cursor:pointer; font-size:12px; color:var(--text); }
     .metric-combo-item:hover, .metric-combo-item.mc-active { background: rgba(0,0,0,0.06); }
     .mc-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
