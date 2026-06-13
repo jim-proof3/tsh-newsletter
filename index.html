@@ -107,7 +107,7 @@
     .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
     .newsletter-body { background: var(--surface); border-radius: 12px; padding: 32px 36px; border: 1px solid var(--border); max-width: 720px; line-height: 1.8; font-family: var(--font-body); transition: background 0.3s, border-color 0.3s; }
     .newsletter-body h1 { font-size: 20px; color: var(--primary); margin-bottom: 8px; font-weight: 700; font-family: var(--font-headline); }
-    .newsletter-body h2 { font-size: 11px; color: var(--primary); margin: 24px 0 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); font-family: var(--font-ui); }
+    .newsletter-body h2 { font-size: 11px; color: var(--primary); margin: 40px 0 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); font-family: var(--font-ui); }
     .newsletter-body p { margin-bottom: 12px; color: var(--text); font-size: 15px; }
     .chart-embed { margin: 14px 0; padding: 14px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
     .chart-label { font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; }
@@ -160,6 +160,20 @@
     .newsletter-toc a:hover { text-decoration: underline; }
     .newsletter-toc .toc-h2 { padding-left: 12px; font-size: 12px; }
     .newsletter-toc .toc-h3 { padding-left: 24px; font-size: 11px; opacity: 0.8; }
+    /* Collapsible TOC — default shut, toggled by clicking the title */
+    .newsletter-toc-title { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+    .newsletter-toc-title .toc-chevron { display: inline-block; font-size: 9px; transition: transform 0.15s ease; line-height: 1; }
+    .newsletter-toc-items { display: none; }
+    .newsletter-toc.toc-open .newsletter-toc-items { display: block; }
+    .newsletter-toc.toc-open .toc-chevron { transform: rotate(90deg); }
+    /* Lists in the newsletter body (bullets + numbered, with nested markers) */
+    .newsletter-body ul, #newsletterBody ul { list-style: disc; margin: 8px 0; padding-left: 26px; }
+    .newsletter-body ol, #newsletterBody ol { list-style: decimal; margin: 8px 0; padding-left: 26px; }
+    .newsletter-body li, #newsletterBody li { margin: 3px 0; }
+    .newsletter-body ul ul, #newsletterBody ul ul { list-style: circle; }
+    .newsletter-body ul ul ul, #newsletterBody ul ul ul { list-style: square; }
+    .newsletter-body ol ol, #newsletterBody ol ol { list-style: lower-alpha; }
+    .newsletter-body ol ol ol, #newsletterBody ol ol ol { list-style: lower-roman; }
 
     /* Chart titles in newsletter view */
     .chart-embed-title {
@@ -354,7 +368,7 @@
           font-size:26px; font-weight:700; margin:0 0 8px;
           font-family:Georgia,serif; letter-spacing:-0.3px; line-height:1.25;
         }
-        body.investor-view #newsletterBody h2 { font-size:20px; font-weight:700; margin:32px 0 8px; }
+        body.investor-view #newsletterBody h2 { font-size:20px; font-weight:700; margin:48px 0 8px; }
         body.investor-view #newsletterBody p { margin:0 0 20px; }
         body.investor-view .newsletter-toc {
           background:transparent; border:none; border-left:3px solid var(--primary);
@@ -730,12 +744,17 @@
           <button onclick="insertHeader(2)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">H2</button>
           <button onclick="insertHeader(3)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;cursor:pointer;">H3</button>
           <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
-          <button onclick="execCmd('bold')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;">B</button>
-          <button onclick="execCmd('italic')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-style:italic;cursor:pointer;">I</button>
-          <button onclick="execCmd('underline')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:underline;cursor:pointer;" title="Underline">U</button>
-          <button onclick="execCmd('strikeThrough')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:line-through;cursor:pointer;" title="Strikethrough">S</button>
-          <button onclick="execCmd('justifyCenter')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Center">C</button>
+          <button onclick="execCmd('bold')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;" title="Bold (&#8984;B)">B</button>
+          <button onclick="execCmd('italic')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;font-style:italic;cursor:pointer;" title="Italic (&#8984;I)">I</button>
+          <button onclick="execCmd('underline')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:underline;cursor:pointer;" title="Underline (&#8984;U)">U</button>
+          <button onclick="execCmd('strikeThrough')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;text-decoration:line-through;cursor:pointer;" title="Strikethrough (&#8984;&#8679;X)">S</button>
+          <button onclick="execCmd('justifyCenter')" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Center (&#8984;&#8679;E)">C</button>
           <button onclick="insertLink()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;" title="Insert link">&#128279;</button>
+          <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
+          <button onclick="insertBulletList()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;cursor:pointer;" title="Bulleted list">&#8226; List</button>
+          <button onclick="insertNumberList()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;cursor:pointer;" title="Numbered list">1. List</button>
+          <button onclick="outdentList()" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;cursor:pointer;" title="Decrease indent (&#8679;Tab)">&#8676;</button>
+          <button onclick="indentList()" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:12px;cursor:pointer;" title="Increase indent (Tab)">&#8677;</button>
           <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
           <label style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;cursor:pointer;white-space:nowrap;">
             &#128247; Add Image / Video
@@ -2073,6 +2092,7 @@ async function generate() {
     customCharts[currentType]   = []; /* deprecated but clear it */
     saveUnifiedChartsToKV(currentType);
     populateChartBuilderMetrics(sd, opsData);
+    _multiTabPopulated = false; /* picker was wiped above — allow additional tabs to repopulate */
     populateMultiTabChartBuilder(); /* async - populates additional tabs */
     /* Pre-fill chart builder date pickers from the actual filtered range */
     prefillChartBuilderDates(fRows);
@@ -2104,16 +2124,27 @@ function buildTOC(container) {
   }
   if (!headers.length) return null;
   var toc = document.createElement('div'); toc.className = 'newsletter-toc'; toc.id = 'newsletter-toc';
-  var ttl = document.createElement('div'); ttl.className = 'newsletter-toc-title'; ttl.textContent = 'Clickable Contents';
+  var ttl = document.createElement('div'); ttl.className = 'newsletter-toc-title';
+  /* Inline onclick so the toggle survives innerHTML serialization (saves + share links) */
+  ttl.setAttribute('onclick', 'toggleTOC(this)');
+  ttl.innerHTML = '<span class="toc-chevron">&#9656;</span><span>Clickable Contents</span>';
   toc.appendChild(ttl);
+  var items = document.createElement('div'); items.className = 'newsletter-toc-items';
   for (var i = 0; i < headers.length; i++) {
     var h = headers[i], anchor = 'section-' + i; h.id = anchor;
     var link = document.createElement('a'); link.href = '#' + anchor; link.textContent = h.textContent;
     link.className = 'toc-' + h.tagName.toLowerCase();
     link.onclick = (function(a) { return function(e) { e.preventDefault(); var t = document.getElementById(a); if (t) t.scrollIntoView({ behavior:'smooth' }); }; })(anchor);
-    toc.appendChild(link);
+    items.appendChild(link);
   }
+  toc.appendChild(items);
   return toc;
+}
+
+/* Toggle the Clickable Contents box open/shut (default shut). Works in edit + investor view. */
+function toggleTOC(titleEl) {
+  var toc = titleEl && titleEl.closest ? titleEl.closest('.newsletter-toc') : null;
+  if (toc) toc.classList.toggle('toc-open');
 }
 
 function updateTOC() {
@@ -2165,6 +2196,43 @@ function formatNormal() {
 }
 
 function execCmd(cmd) { document.execCommand(cmd, false, null); }
+
+/* Bullet / numbered lists + indent control */
+function insertBulletList() { document.execCommand('insertUnorderedList', false, null); }
+function insertNumberList() { document.execCommand('insertOrderedList', false, null); }
+function indentList()  { document.execCommand('indent', false, null); }
+function outdentList() { document.execCommand('outdent', false, null); }
+
+/* Keyboard shortcuts in the editable newsletter body.
+   Cmd/Ctrl: B=bold, I=italic, U=underline. Cmd/Ctrl+Shift: X=strikethrough,
+   L/E/R = align left/center/right (Google Docs conventions; Shift avoids clobbering
+   the browser's Cmd+L address bar / Cmd+R reload / Cmd+E search).
+   Tab / Shift+Tab inside a list item = indent / outdent. */
+function newsletterKeydown(e) {
+  if (!isEditMode) return;
+  /* Tab indent/outdent, only when the caret sits inside a list item */
+  if (e.key === 'Tab') {
+    var sel = window.getSelection();
+    var node = sel && sel.rangeCount ? sel.anchorNode : null;
+    while (node && node.nodeName !== 'BODY') {
+      if (node.nodeName === 'LI') { e.preventDefault(); document.execCommand(e.shiftKey ? 'outdent' : 'indent', false, null); return; }
+      node = node.parentNode;
+    }
+    return;
+  }
+  if (!(e.metaKey || e.ctrlKey)) return;
+  var k = (e.key || '').toLowerCase();
+  if (e.shiftKey) {
+    if (k === 'x')      { e.preventDefault(); document.execCommand('strikeThrough', false, null); }
+    else if (k === 'l') { e.preventDefault(); document.execCommand('justifyLeft', false, null); }
+    else if (k === 'e') { e.preventDefault(); document.execCommand('justifyCenter', false, null); }
+    else if (k === 'r') { e.preventDefault(); document.execCommand('justifyRight', false, null); }
+  } else {
+    if (k === 'b')      { e.preventDefault(); document.execCommand('bold', false, null); }
+    else if (k === 'i') { e.preventDefault(); document.execCommand('italic', false, null); }
+    else if (k === 'u') { e.preventDefault(); document.execCommand('underline', false, null); }
+  }
+}
 
 
 /* ── Re-render Charts in existing newsletter without regenerating ── */
@@ -2566,6 +2634,7 @@ function renderNewsletter(text, charts) {
   body.style.outline   = isEditMode ? '2px solid var(--primary)' : 'none';
   body.onmouseup = saveCursorPosition;
   body.onkeyup   = saveCursorPosition;
+  body.onkeydown = newsletterKeydown;
   requestAnimationFrame(function() {
     requestAnimationFrame(function() {
       updateTOC();
