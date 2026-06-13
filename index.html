@@ -70,6 +70,9 @@
     .header-meta { font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 0.5px; }
     .app { display: grid; grid-template-columns: 360px 1fr; min-height: calc(100vh - 59px); }
     .controls { background: var(--surface); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 59px; height: calc(100vh - 59px); overflow-y: auto; }
+    /* When inputs are hidden (Charts tab, or user toggle) the main column takes the full width */
+    .app.inputs-collapsed { grid-template-columns: 1fr !important; }
+    .app.inputs-collapsed .controls { display: none !important; }
     .panel-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 6px; }
     .type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
     .type-card { padding: 8px 4px; border: 2px solid var(--border); border-radius: 8px; text-align: center; cursor: pointer; font-size: 10px; font-weight: 600; color: var(--muted); line-height: 1.4; transition: border-color 0.15s, color 0.15s, background 0.15s; pointer-events: all; user-select: none; -webkit-user-select: none; }
@@ -182,10 +185,10 @@
     .mc-trigger-label.mc-empty { color: var(--muted); }
     .mc-trigger-bucket { color: var(--muted); font-size:10px; font-weight:600; }
     .mc-caret { color: var(--muted); font-size:10px; flex-shrink:0; }
-    .metric-combo-panel { position:absolute; z-index:60; left:0; right:0; top:calc(100% + 4px); background:var(--surface,var(--bg)); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.18); padding:6px; max-height:340px; display:flex; flex-direction:column; }
-    .metric-combo-search { width:100%; border:1px solid var(--border); border-radius:6px; padding:7px 9px; font-size:12px; color:var(--text); background:var(--bg); margin-bottom:6px; box-sizing:border-box; font-family:var(--font-ui); }
+    .metric-combo-panel { position:absolute; z-index:60; left:0; right:0; top:calc(100% + 4px); background:var(--surface,var(--bg)); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.18); padding:6px; max-height:min(340px, 60vh); display:flex; flex-direction:column; }
+    .metric-combo-search { width:100%; border:1px solid var(--border); border-radius:6px; padding:7px 9px; font-size:12px; color:var(--text); background:var(--bg); margin-bottom:6px; box-sizing:border-box; font-family:var(--font-ui); flex-shrink:0; }
     .metric-combo-search:focus { outline:none; border-color:var(--primary); }
-    .metric-combo-results { overflow-y:auto; }
+    .metric-combo-results { overflow-y:auto; min-height:0; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
     .metric-combo-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border-radius:5px; cursor:pointer; font-size:12px; color:var(--text); }
     .metric-combo-item:hover, .metric-combo-item.mc-active { background: rgba(0,0,0,0.06); }
     .mc-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -310,7 +313,7 @@
         }
         @media (max-width: 1024px) {
           .app { grid-template-columns: 1fr !important; height: auto !important; }
-          .controls { max-height: none; overflow-y: visible; border-right: none; border-bottom: 1px solid var(--border); }
+          .controls { max-height: none; height: auto !important; overflow-y: visible; position: static; border-right: none; border-bottom: 1px solid var(--border); }
           .top-bar { flex-wrap: wrap; height: auto; padding: 8px 10px; gap: 4px; position: relative; }
           .top-bar-spacer { display: none; }
           .top-bar-actions { flex-wrap: wrap; }
@@ -322,8 +325,8 @@
           .charts-grid { grid-template-columns: 1fr !important; }
           .output { padding: 16px 12px; }
           .chart-embed canvas { height: 200px !important; }
-          /* Edit toolbar can't assume a 360px sidebar once stacked */
-          #editToolbar.visible { width: calc(100% - 24px) !important; left: 12px !important; transform: none !important; max-width: none !important; }
+          /* Edit toolbar pinned to the bottom of the viewport on mobile — always visible while editing, sits above the keyboard */
+          #editToolbar.visible { top: auto !important; bottom: 0 !important; left: 0 !important; width: 100% !important; max-width: none !important; transform: none !important; border-radius: 0 !important; border-left: none !important; border-right: none !important; border-bottom: none !important; }
         }
         @media (max-width: 600px) {
           * { box-sizing: border-box; }
@@ -693,6 +696,7 @@
     <button class="top-tab-btn active" data-tab="newsletter" onclick="switchTab('newsletter', this)">Newsletter</button>
     <button class="top-tab-btn" data-tab="charts" onclick="switchTab('charts', this)">Charts</button>
   </div>
+  <button class="top-bar-btn" id="inputsToggleBtn" onclick="toggleInputs()" title="Show or hide the input fields">&#9776; Hide Inputs</button>
   <div class="top-bar-spacer"></div>
   <div class="top-bar-meta" id="topBarMeta"></div>
   <div class="top-bar-actions">
@@ -1083,6 +1087,8 @@ var BT = String.fromCharCode(96);
 var CHART_OPEN  = BT + BT + BT + 'chart';
 var FENCE_CLOSE = BT + BT + BT;
 var newsletters       = { all: null, p3spv: null };
+var _currentTab       = 'newsletter';  /* declared above init IIFE — used by applyControlsVisibility */
+var _inputsHidden     = false;
 var _lastRawMarkdown  = { all: null, p3spv: null };
 var allCharts      = { all: [],   p3spv: []   };
 var selectedCharts = { all: [],   p3spv: []   };
@@ -1211,6 +1217,7 @@ function setType(type, cardEl) {
   restoreContextFields();
   setupContextFieldPersistence();
   try { initMetricCombos(); } catch(e) { console.error('[init] metric combos failed (non-fatal):', e); }
+  try { applyControlsVisibility(); } catch(e) {}
   /* Apply UI state for currentType (already read from localStorage at declaration).
      But if we're in investor view (?view=...), let checkViewMode set type from URL.
      This avoids overriding the head-script favicon with stale localStorage value. */
@@ -1404,6 +1411,24 @@ function showNewsletterForType(type) {
 
 /* === TAB SWITCHING === */
 
+/* Controls (context inputs + Generate button) are only relevant to the Newsletter
+   generation flow. They're force-hidden on the Charts tab, and can also be toggled
+   off by the user on the Newsletter tab (useful on mobile and for a wider canvas).
+   State (_currentTab / _inputsHidden) is declared above the init IIFE — see the
+   init load-order rule in DECISIONS.md. */
+function applyControlsVisibility() {
+  var app = document.querySelector('.app');
+  var hide = (_currentTab === 'charts') || _inputsHidden === true;
+  if (app) app.classList.toggle('inputs-collapsed', !!hide);
+  var btn = document.getElementById('inputsToggleBtn');
+  if (btn) {
+    /* On the Charts tab the inputs are always hidden, so the toggle is irrelevant */
+    btn.style.display = (_currentTab === 'charts') ? 'none' : '';
+    btn.innerHTML = _inputsHidden ? '&#9776; Show Inputs' : '&#9776; Hide Inputs';
+  }
+}
+function toggleInputs() { _inputsHidden = !_inputsHidden; applyControlsVisibility(); }
+
 function switchTab(tab, el) {
   if (_editsDirty && isEditMode) {
     var save = confirm('You have unsaved edits. Save before switching?');
@@ -1421,6 +1446,8 @@ function switchTab(tab, el) {
   for (var j = 0; j < topTabs.length; j++) topTabs[j].classList.toggle('active', topTabs[j].getAttribute('data-tab') === tab);
   document.getElementById('newsletterTab').style.display = tab === 'newsletter' ? 'block' : 'none';
   document.getElementById('chartsTab').style.display     = tab === 'charts'     ? 'block' : 'none';
+  _currentTab = tab;
+  applyControlsVisibility();
   if (tab === 'charts') {
     /* Always ensure sheet data + multi-tab data is loaded */
     if (!sheetDataCache) {
@@ -3877,7 +3904,7 @@ function mcScore(it, q) {
   if (new RegExp('\\b' + mcEscapeRx(q)).test(n)) return 600;
   if (n.indexOf(q) >= 0) return 400;
   if (b.indexOf(q) >= 0) return 220;
-  if (mcSubsequence(q, n)) return 120;
+  if (q.length <= 3 && mcSubsequence(q, n)) return 120; /* fuzzy only for short queries; longer ones tighten */
   return 0;
 }
 function initMetricCombo(selectId) {
