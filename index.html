@@ -108,13 +108,13 @@
     .tab { padding: 7px 14px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s; }
     .tab:hover { color: var(--primary); }
     .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-    .newsletter-body { background: var(--surface); border-radius: 12px; padding: 32px 36px; border: 1px solid var(--border); max-width: 720px; line-height: 1.8; font-family: var(--font-body); transition: background 0.3s, border-color 0.3s; }
+    .newsletter-body { background: var(--surface); border-radius: 12px; padding: 32px 36px; border: 1px solid var(--border); max-width: 920px; line-height: 1.8; font-family: var(--font-body); transition: background 0.3s, border-color 0.3s; }
     .newsletter-body h1 { font-size: 20px; color: var(--primary); margin-bottom: 8px; font-weight: 700; font-family: var(--font-headline); }
     .newsletter-body h2 { font-size: 11px; color: var(--primary); margin: 40px 0 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); font-family: var(--font-ui); }
     .newsletter-body p { margin-bottom: 12px; color: var(--text); font-size: 15px; }
     .chart-embed { margin: 14px 0; padding: 14px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
     .chart-label { font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; }
-    .export-bar { display: flex; gap: 10px; margin-top: 16px; max-width: 720px; }
+    .export-bar { display: flex; gap: 10px; margin-top: 16px; max-width: 920px; }
     .export-btn { padding: 9px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 2px solid var(--primary); color: var(--primary); background: var(--surface); }
         .toggle-btn.active { background: var(--primary); color: white; }
     .export-btn:hover { background: var(--primary); color: white; }
@@ -140,7 +140,7 @@
 
     /* Edit toolbar */
     #editToolbar { display: none; }
-    #editToolbar.visible { display: flex !important; position: fixed !important; top: 52px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 150 !important; width: calc(100% - 400px) !important; max-width: 720px !important; }
+    #editToolbar.visible { display: flex !important; position: fixed !important; top: 52px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 150 !important; width: calc(100% - 400px) !important; max-width: 920px !important; }
 
     /* Table of contents */
     .newsletter-toc {
@@ -1043,6 +1043,7 @@ var CONTEXT_FIELDS = {
   /* All Entities (SageHouse) — new 8-field structure as of v7 */
   sagehouse_v7: [
     { id:'sgOneSentenceSummary', label:'One Sentence Summary', type:'textarea', rows:2, placeholder:'e.g. Cash burn flat, advisory steady, proof3 closing in on breakeven.' },
+    { id:'sgBottlenecks',        label:'Biggest Bottlenecks Requiring Solving', type:'textarea', rows:3, placeholder:'The most pressing problems you need solved right now — capital, hiring, a stalled deal, a system that won\'t scale. Becomes the opening section, above Top of Mind.' },
     { id:'sgTopOfMind',          label:'Top of Mind for Jim', type:'textarea', rows:4, placeholder:'CEO brain dump — what occupies your headspace this month. Strategy, risks, big bets, lessons.' },
     { id:'sgPortfolioUpdates',   label:'Portfolio Company Updates', type:'textarea', rows:3, placeholder:'e.g. SIQ Basketball strong holiday season. Elo Health Series A track.' },
     { id:'sgRolledFinancial',    label:'TSH + proof3 Rolled Up Financial Updates', type:'textarea', rows:3, placeholder:'e.g. Total revenue $161k, expenses $145k, cash $244k. Net break-even after eliminations.' },
@@ -1077,6 +1078,7 @@ var CONTEXT_FIELDS = {
     { id:'p3Gym1Target',         label:'Gym Member Target', type:'number', placeholder:'100' },
     { id:'p3CoachingTarget',     label:'p3c Client Target', type:'number', placeholder:'350' },
     { id:'p3OneSentenceSummary', label:'One Sentence Summary', type:'textarea', rows:2, placeholder:'e.g. Gym at 91 members and trending toward breakeven, coaching MRR steady, burn down 12%.' },
+    { id:'p3Bottlenecks',        label:'Biggest Bottlenecks Requiring Solving', type:'textarea', rows:3, placeholder:'The most pressing problems on the proof3 side you need solved right now — capital, a stalled lease, hiring, a system that won\'t scale. Becomes the opening section, above Top of Mind.' },
     { id:'p3TopOfMind',          label:'Top of Mind for Jim', type:'textarea', rows:4, placeholder:'CEO brain dump — what occupies your headspace this month on the proof3 side. Strategy, risks, big bets, lessons.' },
     { id:'p3RolledFinancial',    label:'proof3 Rolled Up Financial Updates', type:'textarea', rows:3, placeholder:'e.g. Total proof3 revenue $58k, expenses $72k, net -$14k. Cash position $X. Path to breakeven Y months.' },
     { id:'p3GymsOps',            label:'proof3 Gyms Operational Update', type:'textarea', rows:3, placeholder:'e.g. Gym 1 at 91 members (+5 MoM). 8 trial members in pipeline. Gym 2 lease in negotiation.' },
@@ -1516,6 +1518,7 @@ function buildContext() {
     /* NEW All Entities (v7) fields */
     sg: {
       oneSentenceSummary: getVal('sgOneSentenceSummary'),
+      bottlenecks:        getVal('sgBottlenecks'),
       topOfMind:          getVal('sgTopOfMind'),
       portfolioUpdates:   getVal('sgPortfolioUpdates'),
       rolledFinancial:    getVal('sgRolledFinancial'),
@@ -1529,6 +1532,7 @@ function buildContext() {
       gym1Target:         getVal('p3Gym1Target'),
       coachingTarget:     getVal('p3CoachingTarget'),
       oneSentenceSummary: getVal('p3OneSentenceSummary'),
+      bottlenecks:        getVal('p3Bottlenecks'),
       topOfMind:          getVal('p3TopOfMind'),
       rolledFinancial:    getVal('p3RolledFinancial'),
       gymsOps:            getVal('p3GymsOps'),
@@ -3286,6 +3290,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
   if (type === 'all') {
     /* NEW All Entities structure */
     if (sg.oneSentenceSummary) lines.push('ONE-SENTENCE SUMMARY (use this exact spirit verbatim as the newsletter dek/subtitle):\n' + sg.oneSentenceSummary);
+    if (sg.bottlenecks)        lines.push('\nBIGGEST BOTTLENECKS REQUIRING SOLVING (the most pressing obstacles Jim needs solved right now — write this as the FIRST H2 section, directly under the dek and above Top of Mind for Jim; be direct and specific, name the bottleneck and what would unblock it):\n' + sg.bottlenecks);
     if (sg.topOfMind)          lines.push('\nTOP OF MIND FOR JIM (his CEO brain dump — weave into the Top of Mind section):\n' + sg.topOfMind);
     if (sg.portfolioUpdates)   lines.push('\nPORTFOLIO COMPANY UPDATES:\n' + sg.portfolioUpdates);
     if (sg.rolledFinancial)    lines.push('\nTSH + proof3 ROLLED-UP FINANCIAL UPDATES:\n' + sg.rolledFinancial);
@@ -3297,6 +3302,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     /* proof3+SPV1 — NEW v7 structure (parallel to All Entities) */
     var p3 = ctx.p3 || {};
     if (p3.oneSentenceSummary) lines.push('ONE-SENTENCE SUMMARY (use this exact spirit verbatim as the newsletter dek/subtitle):\n' + p3.oneSentenceSummary);
+    if (p3.bottlenecks)        lines.push('\nBIGGEST BOTTLENECKS REQUIRING SOLVING (the most pressing obstacles on the proof3 side Jim needs solved right now — write this as the FIRST H2 section, directly under the dek and above Top of Mind for Jim; be direct and specific, name the bottleneck and what would unblock it):\n' + p3.bottlenecks);
     if (p3.topOfMind)          lines.push('\nTOP OF MIND FOR JIM (his CEO brain dump on proof3 — weave into the Top of Mind section):\n' + p3.topOfMind);
     if (p3.gym1Target)         lines.push('\nGYM 1 MEMBER TARGET: ' + p3.gym1Target);
     if (p3.coachingTarget)     lines.push('p3 COACHING CLIENT TARGET: ' + p3.coachingTarget);
@@ -3322,6 +3328,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
   var h2List, chartPlacement;
   if (type === 'all') {
     h2List = [
+      'Biggest Bottlenecks Requiring Solving',
       'Top of Mind for Jim',
       'Portfolio Company Updates',
       'TSH + proof3 Rolled Up Financial Updates',
@@ -3340,6 +3347,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
   } else {
     /* proof3+SPV1 — parallel 5-H2 structure */
     h2List = [
+      'Biggest Bottlenecks Requiring Solving',
       'Top of Mind for Jim',
       'proof3 Rolled Up Financial Updates',
       'proof3 Gyms Operational Update',
