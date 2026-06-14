@@ -376,7 +376,7 @@
         body.investor-view .app-wrapper { margin-top:0; }
         body.investor-view .app { height:auto; display:block; }
         body.investor-view .output { max-width:820px; margin:0 auto; padding:32px 24px 60px; transition: max-width 0.3s; }
-        body.investor-view.wide-view .output { max-width:1100px; }
+        body.investor-view.wide-view .output { max-width:1320px; }
         body.investor-view.wide-view #newsletterContent,
         body.investor-view.wide-view #newsletterBody { max-width:100%; }
         body.investor-view.wide-view .chart-embed { max-width:100%; }
@@ -391,6 +391,12 @@
         }
         .view-toggle-btn:hover { background:var(--primary); border-color:white; transform:scale(1.05); }
         [data-brand="proof3"] .view-toggle-btn { background:#1f2938; }
+        /* Wide/Narrow toggle is a desktop-only affordance — on any phone (either orientation)
+           there isn't room to analyze charts side by side, so hide it and keep 1 chart per row. */
+        @media (max-width: 1024px) {
+          .view-toggle-btn { display: none !important; }
+          body.investor-view.wide-view .charts-grid { grid-template-columns: 1fr !important; }
+        }
         body.investor-view #newsletterBody { font-size:17px; line-height:1.75; max-width:100%; }
         /* Widen the lighter box but keep the text column where it is (desktop only — mobile stays full-bleed) */
         @media (min-width: 768px) {
@@ -1399,15 +1405,6 @@ function showNewsletterForType(type) {
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('newsletterContent').style.display = 'block';
 
-  /* Add narrow/wide view toggle button */
-  var toggleBtn = document.createElement('button');
-  toggleBtn.className = 'view-toggle-btn';
-  toggleBtn.textContent = 'Wide View';
-  toggleBtn.onclick = function() {
-    document.body.classList.toggle('wide-view');
-    toggleBtn.textContent = document.body.classList.contains('wide-view') ? 'Narrow View' : 'Wide View';
-  };
-  document.body.appendChild(toggleBtn);
   var charts = selectedCharts[type].length ? selectedCharts[type] : allCharts[type];
   renderNewsletter(newsletters[type], charts);
   /* Render charts immediately if newsletter tab is visible */
