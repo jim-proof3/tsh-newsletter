@@ -518,6 +518,8 @@
         body.investor-view *.chart-drag-handle { display: none !important; visibility: hidden !important; }
         body.investor-view .chart-embed button { display: none !important; }
         body.investor-view .chart-card button[onclick*="remove"] { display: none !important; }
+        /* Readers can't insert charts — hide the Insert button in the share view */
+        body.investor-view button[onclick*="insertChartAtSection"] { display: none !important; }
         body.investor-view .chart-embed[draggable] { cursor: default !important; }
         body.investor-view .chart-embed[draggable="true"] { cursor: default !important; }
         body.investor-view .chart-embed[draggable=true] { cursor: default !important; }
