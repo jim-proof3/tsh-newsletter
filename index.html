@@ -128,6 +128,15 @@
     .chart-card { background: var(--surface); border-radius: 10px; padding: 18px; border: 1px solid var(--border); transition: background 0.3s;  position:relative; min-width: 0; }
     .chart-card canvas { max-width: 100%; }
     .chart-card-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+    .chart-drag-handle { cursor:grab; color:var(--muted); font-size:16px; line-height:1; padding:2px 4px; user-select:none; flex-shrink:0; }
+    .chart-drag-handle:active { cursor:grabbing; }
+    [data-brand="proof3"] .chart-drag-handle { color: rgba(255,255,255,0.55); }
+    .chart-card.dragging { opacity:0.4; }
+    .chart-card.drag-over { outline:2px dashed var(--primary); outline-offset:2px; }
+    .chart-move-btn { display:none; border:none; background:var(--border); color:var(--text); font-size:12px; font-weight:700; line-height:1; cursor:pointer; padding:3px 8px; border-radius:4px; flex-shrink:0; }
+    .chart-move-btn:disabled { opacity:0.3; cursor:default; }
+    @media (max-width:1024px) { .chart-drag-handle { display:none; } .chart-move-btn { display:inline-block; } }
+    body.investor-view .chart-drag-handle, body.investor-view .chart-move-btn { display:none !important; }
 
     /* Edit toolbar */
     #editToolbar { display: none; }
@@ -2968,6 +2977,33 @@ function removeGeneratedChart(idx) {
   showStatus('success', 'Chart deleted.');
 }
 
+/* ---- Chart reordering (editor only): drag handle on desktop, ▲▼ buttons on mobile ---- */
+var _chartDragSrc = null;
+function reorderCharts(from, to) {
+  if (document.body.classList.contains('investor-view')) return;
+  var arr = allCharts[currentType];
+  if (!arr || from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return;
+  var item = arr.splice(from, 1)[0];
+  arr.splice(to, 0, item);
+  renderChartsTab();
+  persistChartOrder();
+}
+function moveChart(idx, dir) {
+  if (document.body.classList.contains('investor-view')) return;
+  var arr = allCharts[currentType];
+  if (!arr) return;
+  var to = idx + dir;
+  if (to < 0 || to >= arr.length) return;
+  var item = arr.splice(idx, 1)[0];
+  arr.splice(to, 0, item);
+  renderChartsTab();
+  persistChartOrder();
+}
+function persistChartOrder() {
+  try { saveUnifiedChartsToKV(currentType); } catch(e) {}
+  try { if (newsletters[currentType]) autoSave(currentType, newsletters[currentType]); } catch(e) {}
+}
+
 function renderChartsTab() {
   var grid = document.getElementById('chartsGrid'), charts = allCharts[currentType] || [];
   /* Destroy tab chart instances */
@@ -2983,14 +3019,29 @@ function renderChartsTab() {
         ? '<span style="font-size:10px;color:var(--muted);padding:3px 8px;">In newsletter</span>'
         : '<button onclick="insertChartAtSection(' + idx + ')" style="padding:3px 10px;background:var(--primary);color:white;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700;">Insert →</button>';
       card.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;min-width:0;">' +
+        '<span class="chart-drag-handle" draggable="true" title="Drag to reorder">&#10303;</span>' +
         '<div class="chart-card-title" style="font-size:13px;">' + (chart.title || 'Chart ' + (idx+1)) + '</div>' +
-        '<div style="display:flex;gap:6px;align-items:center;">' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">' +
+        '<button class="chart-move-btn" onclick="moveChart(' + idx + ',-1)"' + (idx === 0 ? ' disabled' : '') + ' title="Move up">&#9650;</button>' +
+        '<button class="chart-move-btn" onclick="moveChart(' + idx + ',1)"' + (idx === charts.length - 1 ? ' disabled' : '') + ' title="Move down">&#9660;</button>' +
         insertBtn +
         '<button onclick="removeGeneratedChart(' + idx + ')" style="border:none;background:var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;padding:2px 7px;border-radius:4px;flex-shrink:0;" title="Delete chart from everywhere">✕</button>' +
         '</div></div>' +
         '<canvas id="chart-tab-' + idx + '" height="200"></canvas>';
       grid.appendChild(card);
+      (function(){
+        var handle = card.querySelector('.chart-drag-handle');
+        if (handle) {
+          handle.addEventListener('dragstart', function(e){ _chartDragSrc = idx; card.classList.add('dragging'); try { e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', String(idx)); if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(card, 20, 20); } catch(_){} });
+          handle.addEventListener('dragend', function(){ _chartDragSrc = null; card.classList.remove('dragging'); var cs=document.querySelectorAll('.chart-card.drag-over'); for (var k=0;k<cs.length;k++) cs[k].classList.remove('drag-over'); });
+        }
+        card.addEventListener('dragover', function(e){ if (_chartDragSrc === null) return; e.preventDefault(); try { e.dataTransfer.dropEffect='move'; } catch(_){} if (idx !== _chartDragSrc) card.classList.add('drag-over'); });
+        card.addEventListener('dragleave', function(){ card.classList.remove('drag-over'); });
+        card.addEventListener('drop', function(e){ e.preventDefault(); card.classList.remove('drag-over'); if (_chartDragSrc === null) return; var from=_chartDragSrc; _chartDragSrc=null; reorderCharts(from, idx); });
+      })();
       setTimeout(function() { var c = document.getElementById('chart-tab-' + idx); if (c) renderSingleChart(c, chart); }, 60);
     })(charts[i], i);
   }
