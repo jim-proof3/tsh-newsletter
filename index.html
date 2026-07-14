@@ -3092,17 +3092,79 @@ function destroyChart(canvasId) {
   } catch(e) {}
 }
 
-function fmtTick(v) {
-  if (Math.abs(v) >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
-  if (Math.abs(v) >= 1000)    return '$' + (v/1000).toFixed(0) + 'k';
-  return v;
+/* === VALUE FORMATTING ===
+   Charts carry a `format` per series: 'currency' | 'percent' | 'number'.
+   It's detected from the RAW sheet cell ($ -> currency, % -> percent) before we strip
+   those characters to parse the number. Charts saved before this existed (and charts
+   Claude emits without a format) fall back to inferring from the metric name. */
+function fmtValue(v, format) {
+  var n = Number(v);
+  if (v === null || v === undefined || isNaN(n)) return v;
+  if (format === 'percent') {
+    return (Math.abs(n) >= 100 ? n.toFixed(0) : n.toFixed(1)) + '%';
+  }
+  if (format === 'number') {
+    if (Math.abs(n) >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (Math.abs(n) >= 10000)   return (n / 1000).toFixed(0) + 'k';
+    return n.toLocaleString();
+  }
+  /* currency (default) */
+  if (Math.abs(n) >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1000)    return '$' + (n / 1000).toFixed(0) + 'k';
+  return '$' + n;
 }
 
-function fmtTooltip(ctx) {
-  var v = ctx.parsed.y;
-  if (Math.abs(v) >= 1000000) return ctx.dataset.label + ': $' + (v/1000000).toFixed(2) + 'M';
-  if (Math.abs(v) >= 1000)    return ctx.dataset.label + ': $' + (v/1000).toFixed(1) + 'k';
-  return ctx.dataset.label + ': ' + v;
+/* Detect format from raw sheet cells, BEFORE $ and % get stripped off. */
+function detectFormatFromRaw(raws) {
+  var pct = 0, cur = 0, seen = 0;
+  for (var i = 0; i < raws.length; i++) {
+    var s = String(raws[i] || '');
+    if (!s.trim()) continue;
+    seen++;
+    if (s.indexOf('%') >= 0) pct++;
+    else if (s.indexOf('$') >= 0) cur++;
+  }
+  if (!seen) return null;
+  if (pct) return 'percent';
+  if (cur) return 'currency';
+  return 'number';
+}
+
+/* Fallback for charts with no stored format (legacy, or Claude-authored JSON). */
+function inferFormatFromName(name) {
+  var s = String(name || '').toLowerCase();
+  if (/%|percent|\bpct\b|\brate\b|margin|churn|retention|yield|unemploy|inflation|\bcpi\b|ratio|spread|share of/.test(s)) return 'percent';
+  if (/\bs&p\b|\bsp ?500\b|nasdaq|\bdow\b|\bvix\b|\bindex\b|\bpoints?\b|members|clients|count|headcount|sessions|visits|units|subscribers|employees|leads|trials|\bnum\b/.test(s)) return 'number';
+  return 'currency';
+}
+
+function seriesFormat(chart, s) {
+  if (s && s.format) return s.format;
+  if (chart && chart.format) return chart.format;
+  return inferFormatFromName((s && (s.label || s.name || s.key)) || (chart && chart.title) || '');
+}
+
+/* Y-axis format for a single-axis chart. If series disagree (e.g. $ and % on one axis),
+   fall back to plain numbers rather than stamping a misleading $ on the axis. */
+function chartAxisFormat(chart) {
+  var ss = (chart && chart.series) || [];
+  if (!ss.length) return inferFormatFromName(chart && chart.title);
+  var f = seriesFormat(chart, ss[0]);
+  for (var i = 1; i < ss.length; i++) {
+    if (seriesFormat(chart, ss[i]) !== f) return 'number';
+  }
+  return f;
+}
+
+function mkTick(chart) {
+  var f = chartAxisFormat(chart);
+  return function(v) { return fmtValue(v, f); };
+}
+function mkTooltip(chart) {
+  return function(ctx) {
+    var s = ((chart && chart.series) || [])[ctx.datasetIndex];
+    return (ctx.dataset.label || '') + ': ' + fmtValue(ctx.parsed.y, seriesFormat(chart, s));
+  };
 }
 
 function getSeriesColor(si, s, brand) {
@@ -3179,11 +3241,11 @@ function renderSingleChart(canvas, chart) {
           tooltip: { backgroundColor: colors.tooltipBg || '#fff',
             titleColor: colors.text, bodyColor: colors.text,
             borderColor: colors.grid, borderWidth: 1,
-            callbacks: { label: fmtTooltip } }
+            callbacks: { label: mkTooltip(chart) } }
         },
         scales: {
           y: { grid:{color:colors.grid, lineWidth:1},
-               ticks:{color:colors.text, font:{size:10}, callback:fmtTick},
+               ticks:{color:colors.text, font:{size:10}, callback:mkTick(chart)},
                border:{color:colors.grid} },
           x: { grid:{display:false},
                ticks:{color:colors.text, font:{size:9}, maxTicksLimit:chart.data.length>24?12:24, maxRotation:45},
@@ -3206,7 +3268,11 @@ function renderDualAxisChart(canvas, chart, labels, colors, brand) {
     chart.data.map(function(d) { return typeof d === 'string' ? 0 : parseFloat(String(d[s1.key]||0).replace(/[$,%]/g,'')) || 0; });
   var label0 = s0.label || s0.name || s0.key || 'Series 1';
   var label1 = s1.label || s1.name || s1.key || 'Series 2';
-  var fmtTick = function(v) { return v >= 1000 || v <= -1000 ? '$' + (v/1000).toFixed(0) + 'k' : '$' + v; };
+  /* Each axis formats independently — a $ series on the left and a % series on the
+     right is the whole point of a dual-axis chart. */
+  var f0 = seriesFormat(chart, s0), f1 = seriesFormat(chart, s1);
+  var fmtTick0 = function(v) { return fmtValue(v, f0); };
+  var fmtTick1 = function(v) { return fmtValue(v, f1); };
   try {
     return new Chart(canvas, {
       type: 'line',
@@ -3231,14 +3297,17 @@ function renderDualAxisChart(canvas, chart, labels, colors, brand) {
           legend: { display: true, position: 'bottom',
             labels: { font:{size:10}, boxWidth:10, padding:10, color: colors.text } },
           tooltip: { backgroundColor: colors.tooltipBg || '#fff',
-            titleColor: colors.text, bodyColor: colors.text }
+            titleColor: colors.text, bodyColor: colors.text,
+            callbacks: { label: function(ctx) {
+              return (ctx.dataset.label || '') + ': ' + fmtValue(ctx.parsed.y, ctx.datasetIndex === 1 ? f1 : f0);
+            } } }
         },
         scales: {
           y:  { position: 'left',  grid: { color: colors.grid },
-                ticks: { color: colors.text, font:{size:10}, callback: fmtTick },
+                ticks: { color: colors.text, font:{size:10}, callback: fmtTick0 },
                 title: { display: true, text: label0, color: colors.text, font:{size:10} } },
           y1: { position: 'right', grid: { drawOnChartArea: false },
-                ticks: { color: c1, font:{size:10}, callback: fmtTick },
+                ticks: { color: c1, font:{size:10}, callback: fmtTick1 },
                 title: { display: true, text: label1, color: c1, font:{size:10} } },
           x:  { grid: { display: false },
                 ticks: { color: colors.text, font:{size:9}, maxTicksLimit: labels.length > 24 ? 12 : 24, maxRotation: 45 } }
@@ -3394,7 +3463,15 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
   for (var hi = 0; hi < h2List.length; hi++) h2Block += '   ## ' + h2List[hi] + '\n';
   var isP3 = type === 'p3spv';
   var cc = isP3 ? '"#3d9cb5" primary, "#a8d4e0" secondary' : '"#13474A" primary, "#F1CC6C" secondary';
-  var ex = co + '\n{"type":"bar","title":"Monthly Revenue","data":[{"date":"Jan 25","value":45000}],"series":[{"key":"value","name":"Revenue","color":"#13474A"}]}\n' + fc;
+  var ex = co + '\n{"type":"bar","title":"Monthly Revenue","data":[{"date":"Jan 25","value":45000}],"series":[{"key":"value","name":"Revenue","color":"#13474A","format":"currency"}]}\n' + fc;
+  var fmtRule =
+    'CHART VALUE FORMAT - REQUIRED:\n' +
+    'Every series MUST include a "format" field so axes and tooltips render correctly:\n' +
+    '  "currency" = dollars (revenue, expenses, cash, MRR, burn, balances)\n' +
+    '  "percent"  = rates and ratios (savings rate, churn %, retention %, margins, unemployment, inflation, yields)\n' +
+    '  "number"   = plain counts (members, clients, sessions, headcount, units)\n' +
+    'A percent series carries the NUMBER ONLY (4.7 means 4.7%), never a dollar value. Formatting a\n' +
+    'percentage as dollars is a factual error in front of investors — choose the format deliberately.\n\n';
   var system =
     'You generate monthly investor newsletters for The SageHouse.\n\n' +
     'ENTITIES:\n' +
@@ -3447,6 +3524,7 @@ function buildPrompts(type, sd, filteredTable, rangeLabel, ctx, opsData, coachin
     '- For all-time trend charts, use all the data rows provided. Do not truncate to 12 months unless showing a recent trend specifically.\n' +
     '- Chart titles MUST reflect the actual date range of the data. The data covers: ' + rangeLabel + '. Use this exact range description in chart titles (e.g. "Monthly Revenue — ' + rangeLabel + '").\n' +
     ex + '\n\n' +
+    fmtRule +
     'DATA: ' + sd.tabName + ' | ' + sd.rowCount + ' months available | ' + sd.earliestDate + ' to ' + sd.latestDate + '\n' +
     'Intercompany eliminations already applied where relevant.\n';
   var user =
@@ -4322,7 +4400,7 @@ async function buildCustomChart() {
 
   function extractSeries(metric) {
     if (!metric) return { labels: [], values: [] };
-    var labels = [], values = [];
+    var labels = [], values = [], raws = [];
     var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     function toDateKey(key) {
       /* Convert "05 2023" to "May 2023", pass through "May 2023" unchanged */
@@ -4350,7 +4428,9 @@ async function buildCustomChart() {
       /* Range filter */
       if (d < rangeStart || d > rangeEnd) continue;
       labels.push(d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }));
-      var rawVal = (row[metric.colIdx] || '').toString().replace(/[$,%\s]/g, '').trim();
+      var rawCell = (row[metric.colIdx] || '').toString();
+      raws.push(rawCell); /* keep the raw cell so we can read $ / % BEFORE stripping them */
+      var rawVal = rawCell.replace(/[$,%\s]/g, '').trim();
       /* Handle parenthesized negatives like (1234) */
       if (rawVal.charAt(0) === '(' && rawVal.charAt(rawVal.length - 1) === ')') {
         rawVal = '-' + rawVal.substring(1, rawVal.length - 1);
@@ -4359,7 +4439,7 @@ async function buildCustomChart() {
     }
 
 
-    return { labels: labels, values: values };
+    return { labels: labels, values: values, format: detectFormatFromRaw(raws) || inferFormatFromName(metric.name) };
   }
 
   var s1 = extractSeries(m1);
@@ -4371,19 +4451,19 @@ async function buildCustomChart() {
            ' — ' + startKey.toUpperCase() + ' TO ' + endKey.toUpperCase(),
     type: ctype,
     data: s1.labels,
-    series: [{ label: axisLabel1 || m1.name, values: s1.values }]
+    series: [{ label: axisLabel1 || m1.name, values: s1.values, format: s1.format }]
   };
 
   if (m2) {
     var s2 = extractSeries(m2);
     console.log('[buildCustomChart] m2:', m2.name, 'rows:', m2.sourceRows.length, 'extracted:', s2.labels.length, 'values:', s2.values.slice(0,3));
-    chartDef.series.push({ label: axisLabel2 || m2.name, values: s2.values });
+    chartDef.series.push({ label: axisLabel2 || m2.name, values: s2.values, format: s2.format });
   }
   if (m3) {
     var s3 = extractSeries(m3);
     var label3El = document.getElementById('chartBuilderLabel3');
     console.log('[buildCustomChart] m3:', m3.name, 'rows:', m3.sourceRows.length, 'extracted:', s3.labels.length, 'values:', s3.values.slice(0,3));
-    chartDef.series.push({ label: (label3El ? label3El.value.trim() : m3.name), values: s3.values });
+    chartDef.series.push({ label: (label3El ? label3El.value.trim() : m3.name), values: s3.values, format: s3.format });
   }
   console.log('[buildCustomChart] FINAL chartDef:', { type: chartDef.type, title: chartDef.title, seriesCount: chartDef.series.length, series: chartDef.series.map(function(s){ return { label: s.label, valsLen: s.values && s.values.length }; }) });
   if (isDual) chartDef.dualAxis = true;
