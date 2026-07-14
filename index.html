@@ -204,6 +204,8 @@
     .mc-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .mc-bucket { flex-shrink:0; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--muted); background:rgba(0,0,0,0.05); border:1px solid var(--border); border-radius:10px; padding:1px 7px; white-space:nowrap; }
     .metric-combo-empty { padding:10px 8px; font-size:12px; color:var(--muted); }
+    .mc-group { position:sticky; top:0; z-index:1; background:var(--surface); padding:6px 8px 4px; margin-top:4px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--primary); border-bottom:1px solid var(--border); }
+    .mc-group:first-child { margin-top:0; }
     [data-brand="proof3"] .metric-combo-item:hover, [data-brand="proof3"] .metric-combo-item.mc-active { background: rgba(255,255,255,0.08); }
     [data-brand="proof3"] .mc-bucket { background: rgba(255,255,255,0.08); }
 
@@ -2146,13 +2148,19 @@ async function generate() {
     var ctx = buildContext(), prompts = buildPrompts(currentType, sd, fTable, fLabel, ctx, opsData, coachingOpsData, econData, econContext);
     var resp = await fetch(WORKER_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: prompts.system, messages: [{ role: 'user', content: prompts.user }], max_tokens: 5000 })
+      /* max_tokens must cover prose (~1200 words) PLUS the full chart JSON blocks — each chart
+         emits its entire data array, so 7 charts of monthly data dominate the output budget.
+         5000 truncated mid-newsletter (died around Economic Data, Top Focus never written). */
+      body: JSON.stringify({ system: prompts.system, messages: [{ role: 'user', content: prompts.user }], max_tokens: 16000 })
     });
     if (!resp.ok) throw new Error('Worker HTTP ' + resp.status);
     var result = await resp.json();
     if (result.error) throw new Error(result.error.message || JSON.stringify(result.error));
     if (!result.content || !result.content[0]) throw new Error('Empty response');
     var text = result.content[0].text;
+    /* Never let a truncated newsletter look like a finished one */
+    var _truncated = (result.stop_reason === 'max_tokens');
+    if (_truncated) console.warn('[generate] Response hit max_tokens — newsletter is truncated.');
     newsletters[currentType]    = text;
     _lastRawMarkdown[currentType] = text; /* preserve for chart re-extraction after edits */
     autoSave(currentType, text, text); /* store text as both display and rawMarkdown */
@@ -2173,8 +2181,13 @@ async function generate() {
     document.getElementById('newsletterContent').style.display = 'block';
     renderNewsletter(text, selectedCharts[currentType]);
     var u = result.usage || {};
-    showStatus('success', 'Done. ' + (u.input_tokens ? u.input_tokens.toLocaleString() + ' in / ' : '') +
-      (u.output_tokens ? u.output_tokens.toLocaleString() + ' out.' : ''));
+    var _usageStr = (u.input_tokens ? u.input_tokens.toLocaleString() + ' in / ' : '') +
+      (u.output_tokens ? u.output_tokens.toLocaleString() + ' out.' : '');
+    if (_truncated) {
+      showStatus('error', 'Truncated — hit the output limit at ' + _usageStr + ' The newsletter is incomplete (last sections missing). Regenerate, or trim inputs/charts.');
+    } else {
+      showStatus('success', 'Done. ' + _usageStr);
+    }
     var metaStr = new Date().toLocaleDateString('en-US', { month:'long', year:'numeric' });
     document.getElementById('outputMeta').textContent = metaStr;
     var tm = document.getElementById('topBarMeta'); if (tm) tm.textContent = metaStr;
@@ -4008,23 +4021,43 @@ function renderMetricResults(selectId, q) {
   var box = wrap.querySelector('.metric-combo-results'); if (!box) return;
   var items = wrap._index || [];
   q = (q || '').trim().toLowerCase();
-  var ranked;
-  if (!q) { ranked = items.map(function(it) { return { it: it, s: 1 }; }); }
-  else {
-    ranked = [];
-    for (var i = 0; i < items.length; i++) { var s = mcScore(items[i], q); if (s > 0) ranked.push({ it: items[i], s: s }); }
-    ranked.sort(function(a, b) { return b.s - a.s || a.it.name.localeCompare(b.it.name); });
-  }
-  ranked = ranked.slice(0, 60);
-  if (!ranked.length) { box.innerHTML = '<div class="metric-combo-empty">No metrics match \u201C' + mcEsc(q) + '\u201D</div>'; return; }
-  var html = '';
-  for (var k = 0; k < ranked.length; k++) {
-    var it = ranked[k].it;
-    html += '<div class="metric-combo-item' + (k === 0 ? ' mc-active' : '') + '" data-value="' + mcEsc(it.value) + '" ' +
+  var html = '', first = true;
+
+  function itemHtml(it) {
+    var h = '<div class="metric-combo-item' + (first ? ' mc-active' : '') + '" data-value="' + mcEsc(it.value) + '" ' +
       'onmousedown="event.preventDefault()" onclick="chooseMetric(\'' + selectId + '\', this.getAttribute(\'data-value\'))">' +
       '<span class="mc-name">' + mcEsc(it.name) + '</span>' + (it.bucket ? '<span class="mc-bucket">' + mcEsc(it.bucket) + '</span>' : '') + '</div>';
+    first = false;
+    return h;
   }
+
+  if (!q) {
+    /* No query: show EVERY metric, grouped by bucket. Never cap here — the index is in
+       select-option order, so a cap silently hides whole tabs (e.g. Economic Metrics). */
+    if (!items.length) { box.innerHTML = '<div class="metric-combo-empty">No metrics loaded yet</div>'; return; }
+    var lastBucket = null;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it.bucket !== lastBucket) {
+        lastBucket = it.bucket;
+        if (it.bucket) html += '<div class="mc-group">' + mcEsc(it.bucket) + '</div>';
+      }
+      html += itemHtml(it);
+    }
+    box.innerHTML = html;
+    box.scrollTop = 0;
+    return;
+  }
+
+  /* Query: rank, then cap (top matches are what matter) */
+  var ranked = [];
+  for (var j = 0; j < items.length; j++) { var s = mcScore(items[j], q); if (s > 0) ranked.push({ it: items[j], s: s }); }
+  ranked.sort(function(a, b) { return b.s - a.s || a.it.name.localeCompare(b.it.name); });
+  ranked = ranked.slice(0, 100);
+  if (!ranked.length) { box.innerHTML = '<div class="metric-combo-empty">No metrics match \u201C' + mcEsc(q) + '\u201D</div>'; return; }
+  for (var k = 0; k < ranked.length; k++) html += itemHtml(ranked[k].it);
   box.innerHTML = html;
+  box.scrollTop = 0;
 }
 function closeAllMetricCombos() { var p = document.querySelectorAll('.metric-combo-panel'); for (var i = 0; i < p.length; i++) p[i].style.display = 'none'; }
 function toggleMetricCombo(selectId) {
