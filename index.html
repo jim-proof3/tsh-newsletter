@@ -1252,8 +1252,13 @@ function setType(type, cardEl) {
   if (!new URLSearchParams(window.location.search).get('view')) {
     setCurrentType(currentType);
   }
-  /* Load unified charts model, falling back to migration from old custom charts */
+  /* Load unified charts model, falling back to migration from old custom charts.
+     INVESTOR VIEW GUARD: a share link is a frozen snapshot. checkViewMode() is the ONLY
+     thing allowed to populate allCharts/selectedCharts there. Without this bail-out, the
+     KV working set (charts-<type>) and the autosave race the share fetch and can overwrite
+     it — which showed investors a different (and possibly unshared) set of charts. */
   (async function() {
+    if (new URLSearchParams(window.location.search).get('view')) return;
     try {
       var hasAll = await loadUnifiedChartsFromKV('all');
       var hasP3 = await loadUnifiedChartsFromKV('p3spv');
@@ -1337,7 +1342,16 @@ async function migrateChartsModel() {
 }
 
 /* === Save the unified charts model to KV === */
+/* Investor share pages are READ-ONLY. Function declaration (hoisted) so init may call it. */
+function _isInvestorView() {
+  try {
+    if (document.body && document.body.classList.contains('investor-view')) return true;
+    return !!new URLSearchParams(window.location.search).get('view');
+  } catch(e) { return false; }
+}
+
 async function saveUnifiedChartsToKV(type) {
+  if (_isInvestorView()) return; /* never let a reader's page write the working chart set */
   var charts = allCharts[type] || [];
   var selected = selectedCharts[type] || [];
   /* selectedCharts stored as indices into allCharts */
@@ -3461,6 +3475,7 @@ var AUTOSAVE_KEY_PREFIX = 'sh_newsletter_autosave_';
 /* Auto-save: write to localStorage AND KV (for cross-browser restore) */
 function autoSave(type, text) {
   if (!text) return;
+  if (_isInvestorView()) return; /* readers never write back to the working autosave */
   var cfg = SHEET_CONFIGS[type] || {};
   /* Always grab the current charts array for this type */
   var chartsToStore = allCharts[type] || [];
