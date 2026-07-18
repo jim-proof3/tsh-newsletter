@@ -84,7 +84,17 @@
     .context-field input, .context-field textarea { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 12px; font-family: var(--font-ui); color: var(--text); background: var(--bg); transition: border-color 0.15s, background 0.3s; }
     .context-field input:focus, .context-field textarea:focus { outline: none; border-color: var(--primary); }
     .context-field textarea { resize: vertical; line-height: 1.5; transition: min-height 0.18s ease, border-color 0.15s, background 0.3s; }
-    .context-field textarea:focus { min-height: 150px; }
+    .context-field textarea:focus { min-height: 72px; }
+    /* Notes tab */
+    .notes-wrap { max-width: 920px; }
+    .notes-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:6px; }
+    .notes-title { font-size:15px; font-weight:700; color:var(--text); }
+    .notes-scope { font-size:12px; font-weight:500; color:var(--muted); }
+    .notes-status { font-size:11px; color:var(--muted); white-space:nowrap; }
+    .notes-hint { font-size:11px; color:var(--muted); line-height:1.55; margin-bottom:12px; }
+    .notes-area { width:100%; box-sizing:border-box; height:calc(100vh - 250px); min-height:360px; border:1px solid var(--border); border-radius:12px; padding:20px 22px; font-size:14px; line-height:1.7; font-family:var(--font-body); color:var(--text); background:var(--surface); resize:vertical; transition:border-color 0.15s, background 0.3s; }
+    .notes-area:focus { outline:none; border-color:var(--primary); }
+    body.investor-view .top-tab-btn[data-tab="notes"] { display:none !important; }
     .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .generate-btn { width: 100%; padding: 13px; background: var(--btn-bg); color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.15s; letter-spacing: 0.3px; }
     .generate-btn:hover:not(:disabled) { background: var(--btn-hover); }
@@ -721,6 +731,7 @@
   <div class="top-bar-tabs">
     <button class="top-tab-btn active" data-tab="newsletter" onclick="switchTab('newsletter', this)">Newsletter</button>
     <button class="top-tab-btn" data-tab="charts" onclick="switchTab('charts', this)">Charts</button>
+    <button class="top-tab-btn" data-tab="notes" onclick="switchTab('notes', this)">Notes</button>
   </div>
   <button class="top-bar-btn" id="inputsToggleBtn" onclick="toggleInputs()" title="Show or hide the input fields">&#9776; Hide Inputs</button>
   <div class="top-bar-spacer"></div>
@@ -917,6 +928,17 @@
       <!-- Generated + custom charts grid -->
       <div class="charts-grid" id="chartsGrid"></div>
     </div>
+
+    <div id="notesTab" style="display:none">
+      <div class="notes-wrap">
+        <div class="notes-head">
+          <div class="notes-title">Monthly Notes<span class="notes-scope" id="notesScope"></span></div>
+          <div class="notes-status" id="notesStatus"></div>
+        </div>
+        <div class="notes-hint">Your running scratchpad for this entity — jot meetings, numbers, and ideas all month. Saved automatically to this browser and backed up to your server, so nothing is lost on refresh or restart. Your input cells stay on the left for quick transfer into the newsletter.</div>
+        <textarea id="notesArea" class="notes-area" placeholder="Start typing this month's notes…" oninput="onNotesInput()"></textarea>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -1011,6 +1033,10 @@ function setCurrentType(type, opts) {
     document.documentElement.setAttribute('data-brand', cfg.brand || 'sagehouse');
     document.body.setAttribute('data-brand', cfg.brand || 'sagehouse');
   } catch(e) {}
+  /* If viewing the Notes tab, swap to this entity's notepad (guarded — no-op at init) */
+  if (typeof _currentTab !== 'undefined' && _currentTab === 'notes' && document.getElementById('notesArea')) {
+    try { loadNotes(type); } catch(e) {}
+  }
 }
 /* Fixed KV keys for auto-saves - same key = always overwritten = latest version */
 var AUTOSAVE_KV_ID = { all: 'autosave-all-entities', p3spv: 'autosave-p3spv' };
@@ -1479,6 +1505,8 @@ function switchTab(tab, el) {
   for (var j = 0; j < topTabs.length; j++) topTabs[j].classList.toggle('active', topTabs[j].getAttribute('data-tab') === tab);
   document.getElementById('newsletterTab').style.display = tab === 'newsletter' ? 'block' : 'none';
   document.getElementById('chartsTab').style.display     = tab === 'charts'     ? 'block' : 'none';
+  var _notesTabEl = document.getElementById('notesTab');
+  if (_notesTabEl) _notesTabEl.style.display = tab === 'notes' ? 'block' : 'none';
   _currentTab = tab;
   applyControlsVisibility();
   if (tab === 'charts') {
@@ -1503,6 +1531,8 @@ function switchTab(tab, el) {
   } else if (tab === 'newsletter') {
     /* Tab is now visible - render any pending inline charts */
     requestAnimationFrame(function() { renderNewsletterCharts(); });
+  } else if (tab === 'notes') {
+    loadNotes(currentType);
   }
 }
 
@@ -3745,7 +3775,7 @@ async function refreshHistoryPanel() {
       var resp = await fetch(WORKER_URL + '/newsletter/list');
       if (resp.ok) {
         var data = await resp.json();
-        _historyCache = data.saves || [];
+        _historyCache = (data.saves || []).filter(function(s) { return !(s.id && s.id.indexOf('notes-') === 0); });
       } else { _historyCache = []; }
     } catch(e) { _historyCache = []; }
   }
@@ -5081,6 +5111,85 @@ function setupContextFieldPersistence() {
   container.addEventListener('input', saveContextFields);
   container.addEventListener('change', saveContextFields);
   container.addEventListener('blur', saveContextFields, true);
+  /* Auto-grow textareas so the whole entry is visible while typing (request: see all text).
+     Grow on focus + input; collapse back to the compact height on blur so the sidebar
+     doesn't stay a mile long once you move on. */
+  container.addEventListener('focus', function(e){ if (e.target && e.target.tagName === 'TEXTAREA') autoGrowTextarea(e.target); }, true);
+  container.addEventListener('input', function(e){ if (e.target && e.target.tagName === 'TEXTAREA') autoGrowTextarea(e.target); });
+  container.addEventListener('blur',  function(e){ if (e.target && e.target.tagName === 'TEXTAREA') e.target.style.height = ''; }, true);
+}
+
+/* Grow a textarea to fit its content (no internal scroll while editing). */
+function autoGrowTextarea(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = (el.scrollHeight + 2) + 'px';
+}
+
+/* === MONTHLY NOTES (per entity, localStorage + server KV backup) === */
+var NOTES_LS_PREFIX = 'sh_notes_';
+var _notesKvTimer = null;
+function _notesLSKey(type) { return NOTES_LS_PREFIX + type; }
+function _loadNotesLocal(type) {
+  try { var raw = localStorage.getItem(_notesLSKey(type)); return raw ? JSON.parse(raw) : null; } catch(e) { return null; }
+}
+function _saveNotesLocal(type, text) {
+  try { localStorage.setItem(_notesLSKey(type), JSON.stringify({ text: text, savedAt: new Date().toISOString() })); } catch(e) {}
+}
+function _setNotesStatus(msg) { var el = document.getElementById('notesStatus'); if (el) el.textContent = msg; }
+function _updateNotesScope(type) {
+  var el = document.getElementById('notesScope'); if (!el) return;
+  el.textContent = ' · ' + (type === 'p3spv' ? 'proof3 + SPV1' : 'All Entities');
+}
+
+function onNotesInput() {
+  if (_isInvestorView()) return;
+  var area = document.getElementById('notesArea'); if (!area) return;
+  var text = area.value;
+  _saveNotesLocal(currentType, text);   /* instant local save — survives refresh/restart */
+  _setNotesStatus('Saving\u2026');
+  clearTimeout(_notesKvTimer);
+  var t = currentType;
+  _notesKvTimer = setTimeout(function() { _saveNotesToKV(t, text); }, 1200); /* debounced server backup */
+}
+
+function _saveNotesToKV(type, text) {
+  if (_isInvestorView()) return;
+  try {
+    fetch(WORKER_URL + '/newsletter', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'notes-' + type, type: type, text: text, title: 'Monthly Notes', saveType: 'notes', autoSave: true })
+    }).then(function(r) { _setNotesStatus(r && r.ok ? 'Saved' : 'Saved locally'); })
+      .catch(function() { _setNotesStatus('Saved locally (offline)'); });
+  } catch(e) { _setNotesStatus('Saved locally'); }
+}
+
+async function loadNotes(type) {
+  var area = document.getElementById('notesArea'); if (!area) return;
+  _updateNotesScope(type);
+  /* 1) instant local */
+  var local = _loadNotesLocal(type);
+  var localText = local ? (local.text || '') : '';
+  var localAt = local ? (local.savedAt || '') : '';
+  area.value = localText;
+  _setNotesStatus(localText ? 'Saved' : '');
+  if (_isInvestorView()) return;
+  /* 2) reconcile with server backup — last write wins by timestamp (handles a fresh machine) */
+  try {
+    var resp = await fetch(WORKER_URL + '/newsletter?id=notes-' + type);
+    if (resp.ok) {
+      var data = await resp.json();
+      if (data && typeof data.text === 'string') {
+        var serverAt = data.savedAt || '';
+        var useServer = (!localText && data.text) || (serverAt && (!localAt || new Date(serverAt) > new Date(localAt)));
+        if (useServer && document.getElementById('notesArea') === area) {
+          area.value = data.text;
+          _saveNotesLocal(type, data.text);
+          _setNotesStatus('Saved');
+        }
+      }
+    }
+  } catch(e) { /* offline — local copy already shown */ }
 }
 
 
