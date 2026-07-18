@@ -719,6 +719,15 @@
     <div id="loginError" style="font-size:12px; color:#e0534f; margin-top:12px; min-height:16px;"></div>
   </div>
 </div>
+<div id="passOverlay" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--bg,#0a0e1a); align-items:center; justify-content:center; padding:20px;">
+  <div style="width:360px; max-width:92vw; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:28px 26px; box-shadow:0 12px 40px rgba(0,0,0,0.35); text-align:center;">
+    <div id="passTitle" style="font-size:16px; font-weight:700; color:var(--text); margin-bottom:6px;">Investor Newsletter</div>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:18px;">This newsletter is protected. Enter the passphrase you were given to view it.</div>
+    <input id="passInput" type="password" placeholder="Passphrase" style="width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:8px; padding:11px 12px; font-size:14px; color:var(--text); background:var(--bg); text-align:center; margin-bottom:14px;">
+    <button id="passBtn" class="top-bar-btn primary" style="width:100%; justify-content:center; padding:11px;">View newsletter</button>
+    <div id="passError" style="font-size:12px; color:#e0534f; margin-top:12px; min-height:16px;"></div>
+  </div>
+</div>
 
 <div id="historyPanel" style="display:none;position:fixed;top:48px;right:0;width:400px;max-height:85vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:0 0 0 12px;box-shadow:0 4px 24px rgba(0,0,0,0.18);z-index:250;padding:0;">
   <div style="padding:14px 16px 0;display:flex;justify-content:space-between;align-items:center;">
@@ -2911,6 +2920,11 @@ async function shareNewsletter() {
   if (!monthLabel || !monthLabel.trim()) return;
   monthLabel = monthLabel.trim();
 
+  /* Optional investor passphrase (B). Leave blank for a public (un-gated) link. */
+  var passphrase = prompt('Set a passphrase investors must enter to view this newsletter.\n\nLeave blank for a public link (no passphrase). You will share this passphrase with investors separately.', '');
+  if (passphrase === null) return; /* cancelled */
+  passphrase = passphrase.trim();
+
   showStatus('loading', 'Saving newsletter for ' + monthLabel + '...');
   try {
     var cfg = SHEET_CONFIGS[currentType] || {};
@@ -2936,7 +2950,8 @@ async function shareNewsletter() {
         title:        brand + ' Investor Newsletter — ' + monthLabel,
         name:         monthLabel,
         named:        true,
-        monthLabel:   monthLabel
+        monthLabel:   monthLabel,
+        passphrase:   passphrase || ''
       })
     });
     if (!resp.ok) throw new Error('Worker ' + resp.status);
@@ -2963,12 +2978,13 @@ async function shareNewsletter() {
     } catch(e) {}
 
     /* Copy to clipboard */
+    var passNote = passphrase ? ('  Passphrase: "' + passphrase + '" (share separately)') : '  (public — no passphrase)';
     try {
       await navigator.clipboard.writeText(shareUrl);
-      showStatus('success', 'Investor link copied for ' + monthLabel + ': ' + shareUrl);
+      showStatus('success', 'Investor link copied for ' + monthLabel + ': ' + shareUrl + passNote);
     } catch(clipErr) {
       window.prompt('Copy this investor link:', shareUrl);
-      showStatus('success', 'Link ready for ' + monthLabel);
+      showStatus('success', 'Link ready for ' + monthLabel + '.' + passNote);
     }
   } catch(err) {
     console.error('Share error:', err);
@@ -3028,10 +3044,7 @@ async function shareNewsletter() {
     toggleBtn.textContent = document.body.classList.contains('wide-view') ? 'Narrow View' : 'Wide View';
   };
   document.body.appendChild(toggleBtn);
-  authFetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(viewId))
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) throw new Error(data.error);
+  function _renderInvestorData(data) {
       var brandName = cfg.brand === 'proof3' ? 'proof3' : 'The SageHouse';
       var monthStr = data.monthLabel || data.name || '';
       var fullTitle = data.title || (brandName + ' Investor Newsletter' + (monthStr ? ' — ' + monthStr : ''));
@@ -3086,6 +3099,50 @@ async function shareNewsletter() {
           renderChartsTab();
         });
       });
+  }
+
+  function _showInvestorPass(meta) {
+    var t = meta.title || ((cfg.brand === 'proof3' ? 'proof3' : 'The SageHouse') + ' Investor Newsletter' + (meta.monthLabel ? ' — ' + meta.monthLabel : ''));
+    if (investorTitleEl) investorTitleEl.textContent = t;
+    document.title = t;
+    var pt = document.getElementById('passTitle'); if (pt) pt.textContent = t;
+    var ov = document.getElementById('passOverlay'); if (ov) ov.style.display = 'flex';
+    var inp = document.getElementById('passInput');
+    var btn = document.getElementById('passBtn');
+    if (btn) btn.onclick = _unlockInvestor;
+    if (inp) { inp.onkeydown = function(e){ if (e.key === 'Enter') _unlockInvestor(); }; setTimeout(function(){ inp.focus(); }, 60); }
+  }
+  async function _unlockInvestor() {
+    var inp = document.getElementById('passInput'), errEl = document.getElementById('passError'), btn = document.getElementById('passBtn');
+    var pass = inp ? inp.value.trim() : '';
+    if (!pass) { if (errEl) errEl.textContent = 'Enter the passphrase.'; return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Unlocking\u2026'; }
+    if (errEl) errEl.textContent = '';
+    try {
+      var resp = await fetch(WORKER_URL + '/newsletter/unlock', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: viewId, passphrase: pass })
+      });
+      var data = await resp.json().catch(function(){ return {}; });
+      if (resp.ok && data && typeof data.text === 'string') {
+        var ov = document.getElementById('passOverlay'); if (ov) ov.style.display = 'none';
+        _renderInvestorData(data);
+      } else {
+        if (errEl) errEl.textContent = (resp.status === 401) ? 'Incorrect passphrase.' : (data.error || 'Could not unlock.');
+      }
+    } catch(e) {
+      if (errEl) errEl.textContent = 'Network error — try again.';
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'View newsletter'; }
+    }
+  }
+
+  authFetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(viewId))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      if (data.passProtected && !data.text) { _showInvestorPass(data); return; }
+      _renderInvestorData(data);
     })
     .catch(function() {
       var body = document.getElementById('newsletterBody');
