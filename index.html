@@ -95,6 +95,7 @@
     .notes-area { width:100%; box-sizing:border-box; height:calc(100vh - 250px); min-height:360px; border:1px solid var(--border); border-radius:12px; padding:20px 22px; font-size:14px; line-height:1.7; font-family:var(--font-body); color:var(--text); background:var(--surface); resize:vertical; transition:border-color 0.15s, background 0.3s; }
     .notes-area:focus { outline:none; border-color:var(--primary); }
     body.investor-view .top-tab-btn[data-tab="notes"] { display:none !important; }
+    body.investor-view #logoutBtn { display:none !important; }
     .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .generate-btn { width: 100%; padding: 13px; background: var(--btn-bg); color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.15s; letter-spacing: 0.3px; }
     .generate-btn:hover:not(:disabled) { background: var(--btn-hover); }
@@ -695,6 +696,18 @@
   </script>
 </head>
 <body>
+<div id="loginOverlay" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--bg,#0a0e1a); align-items:center; justify-content:center;">
+  <div style="width:340px; max-width:90vw; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:28px 26px; box-shadow:0 12px 40px rgba(0,0,0,0.35);">
+    <div style="font-size:17px; font-weight:700; color:var(--text); margin-bottom:4px;">Sign in</div>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:18px;">Editor access to the SageHouse newsletter system.</div>
+    <label style="display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); margin-bottom:4px;">Email</label>
+    <input id="loginEmail" type="email" autocomplete="username" style="width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:7px; padding:9px 11px; font-size:13px; color:var(--text); background:var(--bg); margin-bottom:12px;">
+    <label style="display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); margin-bottom:4px;">Password</label>
+    <input id="loginPassword" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:7px; padding:9px 11px; font-size:13px; color:var(--text); background:var(--bg); margin-bottom:16px;">
+    <button onclick="doLogin()" id="loginBtn" class="top-bar-btn primary" style="width:100%; justify-content:center; padding:10px;">Sign in</button>
+    <div id="loginError" style="font-size:12px; color:#e0534f; margin-top:12px; min-height:16px;"></div>
+  </div>
+</div>
 
 <div id="historyPanel" style="display:none;position:fixed;top:48px;right:0;width:400px;max-height:85vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:0 0 0 12px;box-shadow:0 4px 24px rgba(0,0,0,0.18);z-index:250;padding:0;">
   <div style="padding:14px 16px 0;display:flex;justify-content:space-between;align-items:center;">
@@ -746,6 +759,7 @@
     <button class="top-bar-btn" onclick="copyNewsletter()">Copy</button>
     <button class="top-bar-btn" onclick="exportToDoc()">Doc</button>
     <button class="top-bar-btn primary" onclick="shareNewsletter()">Share</button>
+    <button class="top-bar-btn" id="logoutBtn" onclick="logout()" title="Sign out">Sign out</button>
   </div>
 </div>
 
@@ -988,6 +1002,94 @@ var _savedEditRange = null;
 /* SAGEHOUSE NEWSLETTER GENERATOR v6 */
 
 var WORKER_URL = 'https://p3-claude-proxy.jim-c.workers.dev';
+
+/* ===== AUTH (A1): editor login — token stored locally, sent on every write ===== */
+var AUTH_TOKEN_KEY = 'sh_auth_token';
+var AUTH_USER_KEY  = 'sh_auth_user';
+function authToken() { try { return localStorage.getItem(AUTH_TOKEN_KEY) || ''; } catch(e) { return ''; } }
+function authUser()  { try { return JSON.parse(localStorage.getItem(AUTH_USER_KEY) || 'null'); } catch(e) { return null; } }
+function setAuth(token, user) {
+  try { localStorage.setItem(AUTH_TOKEN_KEY, token); localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user || {})); } catch(e) {}
+}
+function clearAuth() { try { localStorage.removeItem(AUTH_TOKEN_KEY); localStorage.removeItem(AUTH_USER_KEY); } catch(e) {} }
+/* Merge the bearer token into a headers object (only when we have one). */
+function authHeaders(base) {
+  base = base || {};
+  var t = authToken();
+  if (t) base['Authorization'] = 'Bearer ' + t;
+  return base;
+}
+/* Wrapper around fetch for gated worker calls: attaches the token and, on a 401,
+   clears the session and shows the login screen so the user can re-auth. */
+async function authFetch(url, opts) {
+  opts = opts || {};
+  opts.headers = authHeaders(opts.headers || {});
+  var resp = await fetch(url, opts);
+  if (resp && resp.status === 401 && !_isInvestorView()) { clearAuth(); showLoginOverlay('Your session expired — please sign in again.'); }
+  return resp;
+}
+
+function showLoginOverlay(msg) {
+  var ov = document.getElementById('loginOverlay'); if (!ov) return;
+  ov.style.display = 'flex';
+  var errEl = document.getElementById('loginError'); if (errEl) errEl.textContent = msg || '';
+  var em = document.getElementById('loginEmail');
+  var u = authUser();
+  if (em) { if (u && u.email) em.value = u.email; setTimeout(function(){ (em.value ? document.getElementById('loginPassword') : em).focus(); }, 50); }
+}
+function hideLoginOverlay() { var ov = document.getElementById('loginOverlay'); if (ov) ov.style.display = 'none'; }
+
+async function doLogin() {
+  var em = document.getElementById('loginEmail'), pw = document.getElementById('loginPassword');
+  var btn = document.getElementById('loginBtn'), errEl = document.getElementById('loginError');
+  var email = (em && em.value || '').trim(), password = (pw && pw.value || '');
+  if (!email || !password) { if (errEl) errEl.textContent = 'Enter your email and password.'; return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
+  if (errEl) errEl.textContent = '';
+  try {
+    var resp = await fetch(WORKER_URL + '/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password })
+    });
+    var data = await resp.json().catch(function(){ return {}; });
+    if (!resp.ok || !data.token) { if (errEl) errEl.textContent = data.error || 'Sign in failed.'; return; }
+    setAuth(data.token, { email: data.email, name: data.name });
+    if (pw) pw.value = '';
+    hideLoginOverlay();
+    /* Reload so the normal init path re-runs with the token present — every gated
+       load (autosave, notes, history) then succeeds without piecemeal re-triggering. */
+    location.reload();
+  } catch(e) {
+    if (errEl) errEl.textContent = 'Network error — try again.';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Sign in'; }
+  }
+}
+
+function logout() {
+  clearAuth();
+  showLoginOverlay('Signed out.');
+}
+
+/* Cosmetic session state for a validated existing token (data already loaded by init). */
+function onAuthReady() {
+  var u = authUser();
+  var lbl = document.getElementById('logoutBtn');
+  if (lbl && u && u.name) lbl.title = 'Signed in as ' + u.name + ' — click to sign out';
+}
+
+/* Load-time gate for the GENERATOR only. Investors never authenticate. */
+async function initAuthGate() {
+  if (_isInvestorView()) return; /* share links are public read-only */
+  var t = authToken();
+  if (!t) { showLoginOverlay(); return; }
+  /* Validate the stored token so an expired one prompts a fresh sign-in up front. */
+  try {
+    var resp = await fetch(WORKER_URL + '/auth/me', { headers: { 'Authorization': 'Bearer ' + t } });
+    if (!resp.ok) { clearAuth(); showLoginOverlay('Please sign in.'); return; }
+    onAuthReady();
+  } catch(e) { /* offline — trust the local token; gated calls will re-prompt on 401 */ onAuthReady(); }
+}
 var FAVICON_SH = "https://jim-proof3.github.io/tsh-newsletter/sh-logo.png?v=1778965831";
 var FAVICON_P3 = "https://jim-proof3.github.io/tsh-newsletter/p3-logo.png?v=1778965831";
 function setTitle(type) {
@@ -1331,7 +1433,7 @@ async function migrateChartsModel() {
     /* Source 2: dedicated KV custom-charts-TYPE */
     var kvCustom = [];
     try {
-      var resp = await fetch(WORKER_URL + '/newsletter?id=custom-charts-' + type);
+      var resp = await authFetch(WORKER_URL + '/newsletter?id=custom-charts-' + type);
       if (resp.ok) {
         var data = await resp.json();
         if (data && data.charts && data.charts.length) kvCustom = data.charts;
@@ -1388,7 +1490,7 @@ async function saveUnifiedChartsToKV(type) {
   } catch(e) {}
 
   try {
-    await fetch(WORKER_URL + '/newsletter', {
+    await authFetch(WORKER_URL + '/newsletter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1409,7 +1511,7 @@ async function saveUnifiedChartsToKV(type) {
 async function loadUnifiedChartsFromKV(type) {
   /* Try KV first (source of truth) */
   try {
-    var resp = await fetch(WORKER_URL + '/newsletter?id=charts-' + type);
+    var resp = await authFetch(WORKER_URL + '/newsletter?id=charts-' + type);
     if (resp.ok) {
       var data = await resp.json();
       if (data && data.charts && data.charts.length) {
@@ -2130,7 +2232,7 @@ async function fetchEconomicContext() {
       'Cover, with current levels and recent direction where available: U.S. Fed policy stance and the rate path; latest CPI/inflation trend; the labor market; equity markets (S&P 500 level and recent move); volatility (VIX); credit spreads / financial-conditions tone; and one line on overall macro tone. ' +
       'Prefer Fed, BLS, Treasury, and major financial press. State figures plainly with their as-of timing. Do not fabricate; omit anything you cannot source.';
     var usr = 'Compile a current U.S. macro brief as of ' + asOf + ' for an investor newsletter. Focus on what changed recently and what it implies for a small fitness/health holding company watching rates, consumer spending, and credit conditions.';
-    var resp = await fetch(WORKER_URL, {
+    var resp = await authFetch(WORKER_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
@@ -2190,7 +2292,7 @@ async function generate() {
     var econData = econResults[0], econContext = econResults[1];
     btn.innerHTML = '<span class="spinner"></span>Writing newsletter...';
     var ctx = buildContext(), prompts = buildPrompts(currentType, sd, fTable, fLabel, ctx, opsData, coachingOpsData, econData, econContext);
-    var resp = await fetch(WORKER_URL, {
+    var resp = await authFetch(WORKER_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       /* max_tokens must cover prose (~1200 words) PLUS the full chart JSON blocks — each chart
          emits its entire data array, so 7 charts of monthly data dominate the output budget.
@@ -2453,7 +2555,7 @@ async function reRenderCharts() {
   if (!allForRender.length) {
     showStatus('loading', 'Loading charts from cloud...');
     try {
-      var resp = await fetch(WORKER_URL + '/newsletter?id=' + AUTOSAVE_KV_ID[currentType]);
+      var resp = await authFetch(WORKER_URL + '/newsletter?id=' + AUTOSAVE_KV_ID[currentType]);
       if (resp.ok) {
         var data = await resp.json();
         if (data.charts && data.charts.length) {
@@ -2564,7 +2666,7 @@ async function uploadAndInsertMedia(file) {
   showStatus('loading', (isVideo ? 'Uploading video' : 'Uploading image') + ' (' + Math.round(file.size/1048576*10)/10 + ' MB)…');
   var url;
   try {
-    var resp = await fetch(WORKER_URL + '/media', {
+    var resp = await authFetch(WORKER_URL + '/media', {
       method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file
     });
     if (!resp.ok) { var er = await resp.json().catch(function(){ return {}; }); throw new Error(er.error || ('HTTP ' + resp.status)); }
@@ -2801,7 +2903,7 @@ async function shareNewsletter() {
     var slug = monthLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     var kvIdBase = 'monthly-' + currentType + '-' + slug;
 
-    var resp = await fetch(WORKER_URL + '/newsletter', {
+    var resp = await authFetch(WORKER_URL + '/newsletter', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id:           kvIdBase,
@@ -2906,7 +3008,7 @@ async function shareNewsletter() {
     toggleBtn.textContent = document.body.classList.contains('wide-view') ? 'Narrow View' : 'Wide View';
   };
   document.body.appendChild(toggleBtn);
-  fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(viewId))
+  authFetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(viewId))
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) throw new Error(data.error);
@@ -2970,6 +3072,9 @@ async function shareNewsletter() {
       if (body) body.innerHTML = '<p style="color:var(--muted);padding:20px 0;">This newsletter link has expired or is unavailable.</p>';
     });
 })();
+
+/* Editor auth gate — runs after checkViewMode so it can tell generator from investor view. */
+try { initAuthGate(); } catch(e) {}
 
 /* === CHARTS === */
 /* Marker radius scales DOWN as a line/area chart gets longer, so dense long-range
@@ -3606,7 +3711,7 @@ function autoSave(type, text) {
     delete _recentlyDeleted[autosaveKey];
   }
   try {
-    fetch(WORKER_URL + '/newsletter', {
+    authFetch(WORKER_URL + '/newsletter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3640,7 +3745,7 @@ async function restoreAutoSaves() {
   for (var i = 0; i < types.length; i++) {
     var type = types[i];
     try {
-      var resp = await fetch(WORKER_URL + '/newsletter?id=' + AUTOSAVE_KV_ID[type]);
+      var resp = await authFetch(WORKER_URL + '/newsletter?id=' + AUTOSAVE_KV_ID[type]);
       if (resp.ok) {
         var data = await resp.json();
         if (data && data.text && !data.error) {
@@ -3772,7 +3877,7 @@ async function refreshHistoryPanel() {
   if (!_historyCache) {
     listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:12px 0;">Loading...</div>';
     try {
-      var resp = await fetch(WORKER_URL + '/newsletter/list');
+      var resp = await authFetch(WORKER_URL + '/newsletter/list');
       if (resp.ok) {
         var data = await resp.json();
         _historyCache = (data.saves || []).filter(function(s) { return !(s.id && s.id.indexOf('notes-') === 0); });
@@ -3882,7 +3987,7 @@ function deleteSaveOptimistic(id, type) {
 
   /* Fire DELETE — worker now writes a tombstone that filters this from list/get
      for 120 seconds, well past KV's eventual-consistency window. */
-  fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id), { method: 'DELETE' })
+  authFetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id), { method: 'DELETE' })
     .then(function(r) {
       console.log('[delete] response status:', r.status, 'for id:', id);
       if (!r.ok) {
@@ -3957,7 +4062,7 @@ async function saveToCloud() {
     var cfg = SHEET_CONFIGS[currentType] || {};
     var body = document.getElementById('newsletterBody');
     var content = (body && body.innerHTML) ? body.innerHTML : text;
-    var resp = await fetch(WORKER_URL + '/newsletter', {
+    var resp = await authFetch(WORKER_URL + '/newsletter', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text: content,
@@ -4014,7 +4119,7 @@ function deleteCloudSaveRef(id) {
 async function loadCloudSave(id, type) {
   showStatus('loading', 'Loading from cloud...');
   try {
-    var resp = await fetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id));
+    var resp = await authFetch(WORKER_URL + '/newsletter?id=' + encodeURIComponent(id));
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
     if (data.error) throw new Error(data.error);
@@ -4320,7 +4425,7 @@ async function saveCustomChartsToKV(type) {
     localStorage.setItem('sh_custom_charts_' + type, JSON.stringify(charts));
   } catch(e) {}
   try {
-    await fetch(WORKER_URL + '/newsletter', {
+    await authFetch(WORKER_URL + '/newsletter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4349,7 +4454,7 @@ async function loadCustomChartsFromKV(type) {
   } catch(e) {}
   /* Fall back to KV */
   try {
-    var resp = await fetch(WORKER_URL + '/newsletter?id=' + CUSTOM_CHARTS_KV[type]);
+    var resp = await authFetch(WORKER_URL + '/newsletter?id=' + CUSTOM_CHARTS_KV[type]);
     if (resp.ok) {
       var data = await resp.json();
       if (data && data.charts && data.charts.length) {
@@ -5156,7 +5261,7 @@ function onNotesInput() {
 function _saveNotesToKV(type, text) {
   if (_isInvestorView()) return;
   try {
-    fetch(WORKER_URL + '/newsletter', {
+    authFetch(WORKER_URL + '/newsletter', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: 'notes-' + type, type: type, text: text, title: 'Monthly Notes', saveType: 'notes', autoSave: true })
     }).then(function(r) { _setNotesStatus(r && r.ok ? 'Saved' : 'Saved locally'); })
@@ -5176,7 +5281,7 @@ async function loadNotes(type) {
   if (_isInvestorView()) return;
   /* 2) reconcile with server backup — last write wins by timestamp (handles a fresh machine) */
   try {
-    var resp = await fetch(WORKER_URL + '/newsletter?id=notes-' + type);
+    var resp = await authFetch(WORKER_URL + '/newsletter?id=notes-' + type);
     if (resp.ok) {
       var data = await resp.json();
       if (data && typeof data.text === 'string') {
