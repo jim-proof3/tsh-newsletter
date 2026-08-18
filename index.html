@@ -105,6 +105,9 @@
     .note-entry-del { margin-left:auto; border:none; background:transparent; color:var(--muted); font-size:16px; line-height:1; cursor:pointer; padding:0 4px; border-radius:4px; }
     .note-entry-del:hover { color:#e0534f; background:var(--border); }
     .note-entry-text { font-size:14px; line-height:1.65; color:var(--text); white-space:pre-wrap; word-break:break-word; }
+    .note-entry-actions { margin-top:8px; }
+    .note-send { font-size:11px; color:var(--muted); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:3px 6px; cursor:pointer; max-width:100%; }
+    .note-send:hover { border-color:var(--primary); color:var(--text); }
     body.investor-view .top-tab-btn[data-tab="notes"] { display:none !important; }
     body.investor-view #logoutBtn { display:none !important; }
     .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -5337,6 +5340,7 @@ function renderNotesList() {
     return;
   }
   var html = '';
+  var optsHtml = _noteFieldOptions();
   for (var i = 0; i < _notesEntries.length; i++) {
     var e = _notesEntries[i];
     var mine = e.authorEmail && me.email && e.authorEmail === me.email;
@@ -5347,9 +5351,42 @@ function renderNotesList() {
         (mine ? '<button class="note-entry-del" title="Delete this note" onclick="deleteNoteEntry(\'' + _escapeHtml(e.id) + '\')">&times;</button>' : '') +
       '</div>' +
       '<div class="note-entry-text">' + _escapeHtml(e.text).replace(/\n/g, '<br>') + '</div>' +
+      '<div class="note-entry-actions"><select class="note-send" onchange="sendNoteToField(\'' + _escapeHtml(e.id) + '\', this.value, this)">' + optsHtml + '</select></div>' +
     '</div>';
   }
   listEl.innerHTML = html;
+}
+
+/* Build the "send to field…" option list from the CURRENT type's prose fields only. */
+function _noteFieldOptions() {
+  var fields = (currentType === 'p3spv') ? CONTEXT_FIELDS.proof3_v7 : CONTEXT_FIELDS.sagehouse_v7;
+  var opts = '<option value="">Send to field\u2026</option>';
+  for (var i = 0; i < fields.length; i++) {
+    if (fields[i].type !== 'textarea') continue;
+    opts += '<option value="' + fields[i].id + '">' + _escapeHtml(fields[i].label) + '</option>';
+  }
+  return opts;
+}
+
+/* Append a note's text into an input cell (never overwrites; blank-line separated).
+   Read-only on the notes log — only reads the entry text and writes the input field. */
+function sendNoteToField(noteId, fieldId, selEl) {
+  if (selEl) selEl.selectedIndex = 0; /* reset the dropdown back to the placeholder */
+  if (!fieldId) return;
+  var note = null;
+  for (var i = 0; i < _notesEntries.length; i++) { if (_notesEntries[i].id === noteId) { note = _notesEntries[i]; break; } }
+  if (!note) return;
+  var ta = document.getElementById(fieldId);
+  if (!ta) { _setNotesStatus('Field not found'); return; }
+  var existing = (ta.value || '').replace(/\s+$/, '');
+  ta.value = existing ? (existing + '\n\n' + note.text) : note.text;
+  /* Fire input so the container's listeners persist it AND auto-grow the field. */
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  var label = fieldId;
+  var fields = (currentType === 'p3spv') ? CONTEXT_FIELDS.proof3_v7 : CONTEXT_FIELDS.sagehouse_v7;
+  for (var j = 0; j < fields.length; j++) { if (fields[j].id === fieldId) { label = fields[j].label; break; } }
+  _setNotesStatus('Added to \u201C' + label + '\u201D');
+  setTimeout(function() { _setNotesStatus(''); }, 2600);
 }
 
 function _cacheNotes(type) { try { localStorage.setItem(_notesCacheKey(type), JSON.stringify(_notesEntries)); } catch(e) {} }
