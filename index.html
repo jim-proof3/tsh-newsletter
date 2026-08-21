@@ -5467,13 +5467,31 @@ function notesComposerKey(ev) {
   if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') { ev.preventDefault(); addNoteEntry(); }
 }
 
-/* Light polling so each partner sees the other's new entries while the tab is open. */
+/* Light polling so each partner sees the other's new entries while the tab is open.
+   Cost control: only polls when the Notes tab is actually VISIBLE (a backgrounded or
+   hidden tab polls nothing), and refreshes immediately on refocus so coming back to
+   the tab is instantly current. 45s interval — this is two people adding notes across
+   a month, not a chat room. */
+var NOTES_POLL_MS = 45000;
+var _notesVisHooked = false;
+function _notesShouldPoll() {
+  return _currentTab === 'notes' && !_isInvestorView() && !document.hidden;
+}
 function startNotesPolling() {
   stopNotesPolling();
+  if (!_notesVisHooked) {
+    _notesVisHooked = true;
+    document.addEventListener('visibilitychange', function() {
+      if (_notesShouldPoll()) { loadNotes(currentType); startNotesPolling(); }
+      else stopNotesPolling();
+    });
+    window.addEventListener('focus', function() { if (_notesShouldPoll()) loadNotes(currentType); });
+  }
+  if (!_notesShouldPoll()) return;
   _notesPollTimer = setInterval(function() {
-    if (_currentTab === 'notes' && !_isInvestorView()) loadNotes(currentType);
+    if (_notesShouldPoll()) loadNotes(currentType);
     else stopNotesPolling();
-  }, 15000);
+  }, NOTES_POLL_MS);
 }
 function stopNotesPolling() { if (_notesPollTimer) { clearInterval(_notesPollTimer); _notesPollTimer = null; } }
 
